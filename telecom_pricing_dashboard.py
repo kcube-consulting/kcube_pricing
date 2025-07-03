@@ -349,7 +349,11 @@ def create_detailed_pdf(data, config, usd_to_inr):
 
 def get_pdf_download_link(pdf, filename):
     """Generate download link for PDF"""
-    b64 = base64.b64encode(pdf.output(dest='S').encode('latin1')).decode()
+    from io import BytesIO
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    b64 = base64.b64encode(buffer.read()).decode()
     return f'<a href="data:application/pdf;base64,{b64}" download="{filename}">Download PDF Report</a>'
 
 def display_pricing_data(df, outbound_toggle):
@@ -562,8 +566,9 @@ def main():
             'chat_sessions': chat_sessions,
             'email_volume': email_volume
         }
+
         pdf = create_detailed_pdf(detailed_table, config, usd_to_inr)
-        st.markdown(get_pdf_download_link(pdf, f"kcube_detailed_report_{selected_agent}_agents.pdf"), unsafe_allow_html=True)
+        st.markdown(get_pdf_download_link(pdf, f"kcube_report_{selected_agent}_agents.pdf"), unsafe_allow_html=True)
 
     with tab3:
         # Breakeven Analysis tab content
