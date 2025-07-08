@@ -31,7 +31,7 @@ def calculate_multi_year_costs(base_cost, years, growth_rate=0.0):
     return [base_cost * (1 + growth_rate)**year for year in range(years)]
 
 def extract_cost(value):
-    if pd.isna(value):
+    if pd.isna(value) or value is None:
         return 0.0
     if isinstance(value, (int, float)):
         return float(value)
@@ -470,6 +470,9 @@ def load_excel_data(uploaded_file):
         return pd.DataFrame()
 
 def process_pricing_data(df, chat_sessions, email_volume, outbound_toggle, minutes_per_agent):
+    if df.empty:
+        return df
+        
     for col in ['MonthlyCost', 'YearlyCost']:
         if col in df.columns:
             df[col] = df[col].apply(extract_cost)
