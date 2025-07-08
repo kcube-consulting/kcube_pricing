@@ -57,22 +57,8 @@ def get_pdf_download_link(pdf, filename):
     b64 = base64.b64encode(pdf_bytes).decode()
     return f'<a href="data:application/pdf;base64,{b64}" download="{filename}">Download PDF Report</a>'
 
-def save_plotly_figure(fig, filename):
-    """Save Plotly figure as PNG image"""
-    try:
-        return fig.to_image(format="png", width=1000, height=600, scale=2)
-    except Exception as e:
-        logger.warning(f"Figure export failed: {str(e)}")
-        # Fallback to basic matplotlib
-        import matplotlib.pyplot as plt
-        fig.write_image("temp.png")
-        with open("temp.png", "rb") as f:
-            img_bytes = f.read()
-        os.remove("temp.png")
-        return img_bytes
-            
-def generate_pdf_report(config, numeric_table, display_table, recommendation, notes, figures):
-    """Generate a PDF report with all pricing details and visualizations"""
+def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
+    """Generate a PDF report with pricing details (text only)"""
     try:
         pdf = FPDF()
         pdf.add_page()
@@ -92,12 +78,38 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(200, 8, txt=f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}", ln=1)
         pdf.cell(200, 8, txt=f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}", ln=1)
         
+        # Add cost breakdown
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', size=10)
+        pdf.cell(200, 8, txt="Cost Breakdown", ln=1)
+        pdf.set_font("Arial", size=10)
+        
+        # Add table headers
+        pdf.cell(70, 8, txt="Metric", border=1)
+        pdf.cell(60, 8, txt="Fixed Pricing", border=1)
+        pdf.cell(60, 8, txt="Pay-As-You-Go", border=1, ln=1)
+        
+        # Add table rows
+        time_period = config['time_period']
+        for _, row in display_table.iterrows():
+            pdf.cell(70, 8, txt=str(row['Metric']), border=1)
+            pdf.cell(60, 8, txt=str(row[f'Fixed_{time_period}']), border=1)
+            pdf.cell(60, 8, txt=str(row[f'PAYG_{time_period}']), border=1, ln=1)
+        
         # Add recommendation
         pdf.ln(10)
         pdf.set_font("Arial", 'B', size=10)
         pdf.cell(200, 8, txt="Recommendation", ln=1)
         pdf.set_font("Arial", size=10)
         for line in recommendation.split('\n'):
+            pdf.cell(200, 8, txt=line.strip(), ln=1)
+        
+        # Add notes
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', size=10)
+        pdf.cell(200, 8, txt="Notes", ln=1)
+        pdf.set_font("Arial", size=10)
+        for line in notes.split('\n'):
             pdf.cell(200, 8, txt=line.strip(), ln=1)
         
         return pdf
@@ -150,15 +162,8 @@ def generate_excel_report(config, numeric_table, display_table, recommendation, 
     
     return output.getvalue()
 
-def get_report_download_links(config, numeric_table, display_table, fixed_cost, payg_cost, time_period, cost_comparison_fig, breakeven_fig, multi_year_fig):
+def get_report_download_links(config, numeric_table, display_table, fixed_cost, payg_cost, time_period):
     """Generate both PDF and Excel report download links"""
-    # Prepare figures
-    figures = {
-        'cost_comparison': save_plotly_figure(cost_comparison_fig, "cost_comparison.png"),
-        'breakeven': save_plotly_figure(breakeven_fig, "breakeven.png"),
-        'multi_year': save_plotly_figure(multi_year_fig, "multi_year.png")
-    }
-    
     # Generate recommendation
     if payg_cost < fixed_cost:
         savings = fixed_cost - payg_cost
@@ -190,7 +195,7 @@ def get_report_download_links(config, numeric_table, display_table, fixed_cost, 
     """
     
     # Generate PDF
-    pdf_report = generate_pdf_report(config, numeric_table, display_table, recommendation, notes, figures)
+    pdf_report = generate_pdf_report(config, numeric_table, display_table, recommendation, notes)
     
     # Generate Excel
     excel_data = generate_excel_report(config, numeric_table, display_table, recommendation, notes)
@@ -561,79 +566,9 @@ def main():
         compare_df['Savings'] = compare_df['Fixed Pricing'] - compare_df['Pay-As-You-Go']
         compare_df['Breakeven Months'] = (IMPLEMENTATION_COST / compare_df['Savings']).round(1)
         
-        breakeven_fig = px.line(
-            compare_df,
-            x='Agents',
-            y='Breakeven Months',
-            title=f"Months to Recover Implementation Cost{'*' if outbound_toggle else ''}",
-            markers=True
-        )
-        breakeven_fig.add_hline(y=12, line_dash="dash", line_color="red", annotation_text="1 Year Benchmark")
-        breakeven_fig.add_vline(x=selected_agent-0.5, line_width=3, line_dash="dash", line_color="red")
-        
-        fixed_yearly = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Fixed Pricing')]['YearlyCost'].values[0]
-        payg_yearly = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Pay-As-You-Go')]['YearlyCost'].values[0]
-        
-        years = list(range(1, analysis_years + 1))
-        fixed_costs = calculate_multi_year_costs(fixed_yearly, analysis_years, growth_rate)
-        payg_costs = calculate_multi_year_costs(payg_yearly, analysis_years, growth_rate)
-        
-        multi_year_fig = make_subplots(specs=[[{"secondary_y": True}]], subplot_titles=("Cumulative Costs", "Annual Costs"))
-        multi_year_fig.add_trace(
-            go.Scatter(
-                x=years,
-                y=np.cumsum(fixed_costs),
-                name="Fixed Pricing (Cumulative)",
-                line=dict(color='blue', width=4),
-                hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
-            ),
-            secondary_y=False
-        )
-        multi_year_fig.add_trace(
-            go.Scatter(
-                x=years,
-                y=np.cumsum(payg_costs),
-                name="PayG (Cumulative)",
-                line=dict(color='green', width=4),
-                hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
-            ),
-            secondary_y=False
-        )
-        multi_year_fig.add_trace(
-            go.Bar(
-                x=years,
-                y=fixed_costs,
-                name="Fixed (Annual)",
-                marker_color='lightblue',
-                opacity=0.7,
-                hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
-            ),
-            secondary_y=True
-        )
-        multi_year_fig.add_trace(
-            go.Bar(
-                x=years,
-                y=payg_costs,
-                name="PayG (Annual)",
-                marker_color='lightgreen',
-                opacity=0.7,
-                hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
-            ),
-            secondary_y=True
-        )
-        multi_year_fig.add_hline(
-            y=IMPLEMENTATION_COST,
-            line_dash="dot",
-            line_color="red",
-            annotation_text="Implementation Cost",
-            annotation_position="bottom right",
-            secondary_y=False
-        )
-        
         pdf_link, excel_link = get_report_download_links(
             config, numeric_table, display_table, 
-            fixed_cost, payg_cost, time_period,
-            cost_comparison_fig, breakeven_fig, multi_year_fig
+            fixed_cost, payg_cost, time_period
         )
         
         col1, col2 = st.columns(2)
