@@ -77,16 +77,19 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_auto_page_break(auto=True, margin=15)
         
         # Get conversion rate if INR enabled
-        inr_rate = config.get('inr_rate', 85)  # Default to 85 if not specified
+        inr_rate = config.get('inr_rate', 75.0)  # Ensure float with default 75.0
         show_inr = config.get('show_inr', False)
         
         def format_currency(value, is_inr=False):
-            """Helper to format currency values"""
-            if pd.isna(value):
+            """Helper to format currency values with safe division"""
+            if pd.isna(value) or value == 0:
                 return "N/A"
-            if is_inr and show_inr:
-                return f"INR {value*inr_rate:,.2f}"  # Using "INR" instead of ₹
-            return f"${value:,.2f}"
+            try:
+                if is_inr and show_inr:
+                    return f"INR {float(value)*float(inr_rate):,.2f}"
+                return f"${float(value):,.2f}"
+            except:
+                return "N/A"
 
         # ========== HEADER SECTION ========== #
         # Premium header with accent line
@@ -110,7 +113,8 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(0, 6, date_text, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         if show_inr:
-            pdf.cell(0, 6, f"Conversion Rate: 1 USD = INR {inr_rate}", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 6, f"Conversion Rate: 1 USD = INR {float(inr_rate):,.2f}", 
+                    align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(10)
         
         # ========== EXECUTIVE SUMMARY ========== #
@@ -127,32 +131,37 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_font("helvetica", "B", 12)
         pdf.multi_cell(0, 6, f"Optimal Pricing Model for {config['agent_count']} Agents:", align='L')
         
-        fixed_cost = numeric_table.iloc[-1]['Fixed_Monthly_Value']
-        payg_cost = numeric_table.iloc[-1]['PAYG_Monthly_Value']
-        savings = abs(fixed_cost - payg_cost)
-        
-        pdf.set_x(15)
-        pdf.set_font("helvetica", "", 10)
-        if payg_cost < fixed_cost:
-            rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency(savings)}"
-            if show_inr:
-                rec_text += f" / {format_currency(savings, True)} monthly)"
+        try:
+            fixed_cost = float(numeric_table.iloc[-1]['Fixed_Monthly_Value'])
+            payg_cost = float(numeric_table.iloc[-1]['PAYG_Monthly_Value'])
+            savings = abs(fixed_cost - payg_cost)
+            
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "", 10)
+            if payg_cost < fixed_cost:
+                rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency(savings)}"
+                if show_inr:
+                    rec_text += f" / {format_currency(savings, True)} monthly)"
+                else:
+                    rec_text += " monthly)"
+                pdf.multi_cell(0, 6, rec_text, align='L')
             else:
-                rec_text += " monthly)"
-            pdf.multi_cell(0, 6, rec_text, align='L')
-        else:
-            rec_text = f"Recommended: Fixed Pricing (Saves {format_currency(savings)}"
+                rec_text = f"Recommended: Fixed Pricing (Saves {format_currency(savings)}"
+                if show_inr:
+                    rec_text += f" / {format_currency(savings, True)} monthly)"
+                else:
+                    rec_text += " monthly)"
+                pdf.multi_cell(0, 6, rec_text, align='L')
+            
+            pdf.set_x(15)
+            imp_text = f"Implementation Cost: $15,000 (one-time)"
             if show_inr:
-                rec_text += f" / {format_currency(savings, True)} monthly)"
-            else:
-                rec_text += " monthly)"
-            pdf.multi_cell(0, 6, rec_text, align='L')
+                imp_text += f" / INR {15000*float(inr_rate):,.0f}"
+            pdf.multi_cell(0, 6, imp_text, align='L')
+        except (ValueError, TypeError, IndexError) as e:
+            pdf.set_x(15)
+            pdf.multi_cell(0, 6, "Cost comparison data not available", align='L')
         
-        pdf.set_x(15)
-        imp_text = f"Implementation Cost: $15,000 (one-time)"
-        if show_inr:
-            imp_text += f" / INR {15000*inr_rate:,.0f}"
-        pdf.multi_cell(0, 6, imp_text, align='L')
         pdf.ln(15)
         
         # ========== COST BREAKDOWN ========== #
@@ -177,44 +186,61 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(col_widths[1], 8, "Fixed", border=1, fill=True, align='C')
         pdf.cell(col_widths[2], 8, "PayG", border=1, fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Data rows
+        # Data rows with error handling
         for i, (_, row) in enumerate(display_table.iterrows()):
-            fill_color = (255, 255, 255) if i % 2 == 0 else (245, 245, 245)
-            
-            metric = str(row['Metric'])[:25]
-            fixed = str(row[f'Fixed_{config["time_period"]}'])
-            payg = str(row[f'PAYG_{config["time_period"]}'])
-            
-            # Add INR values if enabled
-            if show_inr and i < len(numeric_table):
-                fixed_val = numeric_table.iloc[i]['Fixed_Monthly_Value']
-                payg_val = numeric_table.iloc[i]['PAYG_Monthly_Value']
-                if not pd.isna(fixed_val) and fixed_val != 0 and "Included" not in fixed and "Not enabled" not in fixed:
-                    fixed += f"\nINR {fixed_val*inr_rate:,.2f}"
-                if not pd.isna(payg_val) and payg_val != 0 and "Included" not in payg and "Not enabled" not in payg:
-                    payg += f"\nINR {payg_val*inr_rate:,.2f}"
-            
-            # Metric cell
-            pdf.set_fill_color(*fill_color)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("helvetica", "B" if i == len(display_table)-1 else "", 9)
-            pdf.cell(col_widths[0], 6, metric, border='LR', fill=True, align='L')
-            
-            # Fixed Pricing cell
-            if "Included" not in fixed and "Not enabled" not in fixed:
-                pdf.set_fill_color(*fixed_fill) if float(numeric_table.iloc[i]['Fixed_Monthly_Value']) < float(numeric_table.iloc[i]['PAYG_Monthly_Value']) else pdf.set_fill_color(*fill_color)
-            pdf.set_font("helvetica", "B" if "Included" not in fixed and "Not enabled" not in fixed else "", 9)
-            pdf.cell(col_widths[1], 6, fixed, border='LR', fill=True, align='C')
-            
-            # Pay-As-You-Go cell
-            if "Included" not in payg and "Not enabled" not in payg:
-                pdf.set_fill_color(*payg_fill) if float(numeric_table.iloc[i]['PAYG_Monthly_Value']) < float(numeric_table.iloc[i]['Fixed_Monthly_Value']) else pdf.set_fill_color(*fill_color)
-            pdf.set_font("helvetica", "B" if "Included" not in payg and "Not enabled" not in payg else "", 9)
-            pdf.cell(col_widths[2], 6, payg, border='LR', fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            
-            # Bottom border
-            pdf.set_draw_color(*border_color)
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            try:
+                fill_color = (255, 255, 255) if i % 2 == 0 else (245, 245, 245)
+                
+                metric = str(row['Metric'])[:25]
+                fixed = str(row[f'Fixed_{config["time_period"]}'])
+                payg = str(row[f'PAYG_{config["time_period"]}'])
+                
+                # Add INR values if enabled
+                if show_inr and i < len(numeric_table):
+                    try:
+                        fixed_val = float(numeric_table.iloc[i]['Fixed_Monthly_Value'])
+                        payg_val = float(numeric_table.iloc[i]['PAYG_Monthly_Value'])
+                        if not pd.isna(fixed_val) and fixed_val != 0 and "Included" not in fixed and "Not enabled" not in fixed:
+                            fixed += f"\nINR {fixed_val*float(inr_rate):,.2f}"
+                        if not pd.isna(payg_val) and payg_val != 0 and "Included" not in payg and "Not enabled" not in payg:
+                            payg += f"\nINR {payg_val*float(inr_rate):,.2f}"
+                    except:
+                        pass
+                
+                # Metric cell
+                pdf.set_fill_color(*fill_color)
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font("helvetica", "B" if i == len(display_table)-1 else "", 9)
+                pdf.cell(col_widths[0], 6, metric, border='LR', fill=True, align='L')
+                
+                # Fixed Pricing cell
+                try:
+                    if "Included" not in fixed and "Not enabled" not in fixed:
+                        fixed_val = float(numeric_table.iloc[i]['Fixed_Monthly_Value'])
+                        payg_val = float(numeric_table.iloc[i]['PAYG_Monthly_Value'])
+                        pdf.set_fill_color(*fixed_fill) if fixed_val < payg_val else pdf.set_fill_color(*fill_color)
+                except:
+                    pass
+                pdf.set_font("helvetica", "B" if "Included" not in fixed and "Not enabled" not in fixed else "", 9)
+                pdf.cell(col_widths[1], 6, fixed, border='LR', fill=True, align='C')
+                
+                # Pay-As-You-Go cell
+                try:
+                    if "Included" not in payg and "Not enabled" not in payg:
+                        fixed_val = float(numeric_table.iloc[i]['Fixed_Monthly_Value'])
+                        payg_val = float(numeric_table.iloc[i]['PAYG_Monthly_Value'])
+                        pdf.set_fill_color(*payg_fill) if payg_val < fixed_val else pdf.set_fill_color(*fill_color)
+                except:
+                    pass
+                pdf.set_font("helvetica", "B" if "Included" not in payg and "Not enabled" not in payg else "", 9)
+                pdf.cell(col_widths[2], 6, payg, border='LR', fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                
+                # Bottom border
+                pdf.set_draw_color(*border_color)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            except Exception as e:
+                logger.error(f"Error rendering row {i}: {str(e)}")
+                continue
         
         # Footer note
         pdf.set_font("helvetica", "I", 8)
@@ -223,40 +249,48 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.ln(10)
         
         # ========== VISUAL COMPARISON ========== #
-        pdf.set_font("helvetica", "B", 14)
-        pdf.set_text_color(0, 51, 102)
-        pdf.cell(0, 10, "Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Create simple bar chart
-        chart_height = 40
-        max_value = max(fixed_cost, payg_cost) * 1.2
-        
-        # Fixed Pricing bar
-        fixed_width = (fixed_cost / max_value) * 150
-        pdf.set_fill_color(50, 150, 50)  # Green
-        pdf.rect(40, pdf.get_y(), fixed_width, chart_height/2, style='F')
-        pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 5)
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(0, 5, f"Fixed: {format_currency(fixed_cost)}")
-        if show_inr:
-            pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 10)
-            pdf.cell(0, 5, f"INR {fixed_cost*inr_rate:,.2f}")
-        
-        # Pay-As-You-Go bar
-        payg_width = (payg_cost / max_value) * 150
-        pdf.set_fill_color(150, 50, 50)  # Red
-        pdf.rect(40, pdf.get_y() + chart_height/2 + 5, payg_width, chart_height/2, style='F')
-        pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 10)
-        pdf.cell(0, 5, f"PayG: {format_currency(payg_cost)}")
-        if show_inr:
-            pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 15)
-            pdf.cell(0, 5, f"INR {payg_cost*inr_rate:,.2f}")
-        
-        # Y-axis label
-        pdf.set_xy(30, pdf.get_y() + chart_height/4)
-        pdf.set_font("helvetica", "", 8)
-        pdf.cell(0, 5, f"{format_currency(max_value)}", align='R')
-        pdf.ln(chart_height + 15)
+        try:
+            fixed_cost = float(numeric_table.iloc[-1]['Fixed_Monthly_Value'])
+            payg_cost = float(numeric_table.iloc[-1]['PAYG_Monthly_Value'])
+            max_value = max(fixed_cost, payg_cost) * 1.2
+            
+            pdf.set_font("helvetica", "B", 14)
+            pdf.set_text_color(0, 51, 102)
+            pdf.cell(0, 10, "Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            
+            # Create simple bar chart
+            chart_height = 40
+            
+            # Fixed Pricing bar
+            fixed_width = (fixed_cost / max_value) * 150 if max_value != 0 else 0
+            pdf.set_fill_color(50, 150, 50)  # Green
+            pdf.rect(40, pdf.get_y(), fixed_width, chart_height/2, style='F')
+            pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 5)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(0, 5, f"Fixed: {format_currency(fixed_cost)}")
+            if show_inr:
+                pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 10)
+                pdf.cell(0, 5, f"INR {fixed_cost*float(inr_rate):,.2f}")
+            
+            # Pay-As-You-Go bar
+            payg_width = (payg_cost / max_value) * 150 if max_value != 0 else 0
+            pdf.set_fill_color(150, 50, 50)  # Red
+            pdf.rect(40, pdf.get_y() + chart_height/2 + 5, payg_width, chart_height/2, style='F')
+            pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 10)
+            pdf.cell(0, 5, f"PayG: {format_currency(payg_cost)}")
+            if show_inr:
+                pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 15)
+                pdf.cell(0, 5, f"INR {payg_cost*float(inr_rate):,.2f}")
+            
+            # Y-axis label
+            pdf.set_xy(30, pdf.get_y() + chart_height/4)
+            pdf.set_font("helvetica", "", 8)
+            pdf.cell(0, 5, f"{format_currency(max_value)}", align='R')
+            pdf.ln(chart_height + 15)
+        except:
+            pdf.set_font("helvetica", "", 10)
+            pdf.multi_cell(0, 6, "Visual comparison not available due to data issues", align='L')
+            pdf.ln(10)
         
         # ========== RECOMMENDATION ========== #
         pdf.set_font("helvetica", "B", 14)
@@ -289,8 +323,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None
-        
+        return None        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
@@ -723,7 +756,10 @@ def main():
         st.dataframe(display_df, hide_index=True, use_container_width=True)
         
         st.markdown("### 📄 Export Detailed Report")
+
         config = {
+            'inr_rate': float(inr_rate),  # Ensure float conversion
+            'show_inr': bool(show_inr),   # Ensure boolean
             'agent_count': selected_agent,
             'time_period': time_period,
             'outbound': outbound_toggle,
@@ -731,9 +767,7 @@ def main():
             'email_volume': email_volume,
             'minutes_per_agent': minutes_per_agent,
             'analysis_years': analysis_years,
-            'growth_rate': growth_rate,
-            'show_inr': True/False,  # From your toggle
-            'inr_rate': conversion_rate  # From your number input
+            'growth_rate': growth_rate
         }
         
         compare_df = processed_df.pivot_table(
