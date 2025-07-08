@@ -74,25 +74,23 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.add_page()
         
         # Use standard PDF core fonts to avoid file dependencies
-        pdf.set_font("helvetica", "", 12)
+        pdf.set_font("helvetica", "", 10)  # Reduced base font size
         
         # Define font styles
         normal_style = FontFace(emphasis="")
         bold_style = FontFace(emphasis="BOLD")
         
-        # Add title
-        pdf.set_font("helvetica", "B", 14)
-        pdf.cell(200, 10, text="Kcube Pricing Report", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 12)
-        pdf.cell(200, 10, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
+        # Add title with smaller font
+        pdf.set_font("helvetica", "B", 12)  # Reduced from 14
+        pdf.cell(200, 8, text="Kcube Pricing Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)  # Reduced height
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(200, 6, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add configuration
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(200, 10, text="Configuration Parameters", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        # Add configuration with tighter spacing
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(200, 6, text="Configuration Parameters", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 9)  # Smaller font for details
         
         config_items = [
             f"Agent Count: {config['agent_count']}",
@@ -104,21 +102,26 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         ]
         
         for item in config_items:
-            pdf.cell(200, 8, text=item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(200, 5, text=item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)  # Reduced height
         
-        # Add cost breakdown
-        pdf.ln(10)
+        # Add divider line
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(4)  # Small space after divider
+        
+        # Add cost breakdown with tighter spacing
         pdf.set_font("helvetica", "B", 10)
-        pdf.cell(200, 8, text="Cost Breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        pdf.cell(200, 6, text="Cost Breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 8)  # Smaller font for table
         
         # Set column widths based on content
         col_widths = [70, 60, 60]  # Metric, Fixed, PAYG
         
         # Add table headers
-        pdf.cell(col_widths[0], 8, text="Metric", border=1)
-        pdf.cell(col_widths[1], 8, text="Fixed Pricing", border=1)
-        pdf.cell(col_widths[2], 8, text="Pay-As-You-Go", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col_widths[0], 6, text="Metric", border=1, fill=True)
+        pdf.cell(col_widths[1], 6, text="Fixed Pricing", border=1, fill=True)
+        pdf.cell(col_widths[2], 6, text="Pay-As-You-Go", border=1, fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add table rows
         time_period = config['time_period']
@@ -128,58 +131,67 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             fixed = str(row[f'Fixed_{time_period}'])[:25]  # Limit to 25 chars
             payg = str(row[f'PAYG_{time_period}'])[:25]  # Limit to 25 chars
             
-            pdf.cell(col_widths[0], 8, text=metric, border=1)
-            pdf.cell(col_widths[1], 8, text=fixed, border=1)
-            pdf.cell(col_widths[2], 8, text=payg, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(col_widths[0], 5, text=metric, border=1)
+            pdf.cell(col_widths[1], 5, text=fixed, border=1)
+            pdf.cell(col_widths[2], 5, text=payg, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add recommendation
-        pdf.ln(10)
+        # Add recommendation with tighter spacing
+        pdf.ln(4)  # Reduced space
         pdf.set_font("helvetica", "B", 10)
-        pdf.cell(200, 8, text="Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        pdf.cell(200, 6, text="Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 9)
         for line in recommendation.split('\n'):
-            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            if line.strip():  # Skip empty lines
+                pdf.multi_cell(0, 4, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add notes with proper formatting
-        pdf.ln(5)
+        # Add notes with proper formatting and tight spacing
+        pdf.ln(2)  # Very small space before notes
         pdf.set_font("helvetica", "B", 10)
-        pdf.cell(200, 8, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        pdf.cell(200, 6, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Format the first line with red asterisk
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(10, 8, text="*", fill=False, new_x=XPos.RIGHT)
-        pdf.set_text_color(255, 0, 0)  # Red color for asterisk
-        pdf.cell(10, 8, text="", new_x=XPos.RIGHT)
-        pdf.set_text_color(0, 0, 0)  # Reset to black
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(50, 8, text="Outbound dialing:", new_x=XPos.RIGHT)
-        pdf.set_font("helvetica", "", 10)
-        pdf.multi_cell(0, 8, text="adds 10% to the base telephony cost (Customer must provide their own dialer)", 
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # Format the notes items
+        note_lines = [
+            "*Outbound dialing: adds 10% to the base telephony cost (Customer must provide their own dialer)",
+            "- Chat Agent Cost: Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)",
+            "- Email Agent Cost: $1,200 for 20,000 emails ($0.06 per additional email)",
+            "- Implementation cost: $15,000 (one-time)",
+            f"- Standard agent time: {config['minutes_per_agent']} minutes/month ({(config['minutes_per_agent']/60):.1f} hours)"
+        ]
         
-        # Add bullet points for other notes
-        note_lines = notes.split('\n')
-        for line in note_lines[2:]:  # Skip first two lines (empty and first note already handled)
-            line = line.strip()
-            if line.startswith('-'):
-                # Bold the label part
-                parts = line.split(':')
+        pdf.set_font("helvetica", "", 9)
+        for line in note_lines:
+            if line.startswith('*'):
+                # Outbound dialing note with red asterisk
+                pdf.set_font("helvetica", "B", 9)
+                pdf.cell(5, 4, text="*", new_x=XPos.RIGHT)
+                pdf.set_text_color(255, 0, 0)  # Red
+                pdf.cell(5, 4, text="", new_x=XPos.RIGHT)  # Space after asterisk
+                pdf.set_text_color(0, 0, 0)  # Black
+                parts = line[1:].split(":")
                 if len(parts) > 1:
-                    pdf.set_font("helvetica", "B", 10)
-                    pdf.cell(10, 8, text="-", new_x=XPos.RIGHT)
-                    pdf.cell(50, 8, text=f"{parts[0][1:]}:", new_x=XPos.RIGHT)
-                    pdf.set_font("helvetica", "", 10)
-                    pdf.multi_cell(0, 8, text=parts[1].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.set_font("helvetica", "B", 9)
+                    pdf.cell(30, 4, text=f"{parts[0]}:", new_x=XPos.RIGHT)
+                    pdf.set_font("helvetica", "", 9)
+                    pdf.multi_cell(0, 4, text=parts[1].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 else:
-                    pdf.set_font("helvetica", "", 10)
-                    pdf.multi_cell(0, 8, text=line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            elif line and not line.startswith('Report generated'):
-                pdf.multi_cell(0, 8, text=line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.multi_cell(0, 4, text=line[1:].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            elif line.startswith('-'):
+                # Bullet points
+                parts = line[1:].split(":")
+                if len(parts) > 1:
+                    pdf.set_font("helvetica", "B", 9)
+                    pdf.cell(5, 4, text="-", new_x=XPos.RIGHT)
+                    pdf.cell(30, 4, text=f"{parts[0]}:", new_x=XPos.RIGHT)
+                    pdf.set_font("helvetica", "", 9)
+                    pdf.multi_cell(0, 4, text=parts[1].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                else:
+                    pdf.set_font("helvetica", "", 9)
+                    pdf.cell(5, 4, text="-", new_x=XPos.RIGHT)
+                    pdf.multi_cell(0, 4, text=line[1:].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add generated date in small font
-        pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 8, text=f"Report generated on {date.today().strftime('%Y-%m-%d')}", 
+        # Add generated date in small font at bottom
+        pdf.set_font("helvetica", "I", 7)
+        pdf.cell(0, 4, text=f"Report generated on {date.today().strftime('%Y-%m-%d')}", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
@@ -187,7 +199,8 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None        
+        return None
+        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
