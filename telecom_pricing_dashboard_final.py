@@ -1,11 +1,9 @@
+from fpdf import FPDF, XPos, YPos, FontFace
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from fpdf import FPDF
-from fpdf.enums import XPos, YPos
-from fpdf.fonts import FontFace
 
 import numpy as np
 import re
@@ -71,114 +69,216 @@ def get_pdf_download_link(pdf, filename):
         return "<p style='color:red'>PDF generation failed</p>"
 
 def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
-    """Generate a PDF report with pricing details (text only)"""
+    """Generate professional PDF report with dynamic currency display"""
     try:
         pdf = FPDF()
         pdf.add_page()
         
-        # Use standard PDF core fonts to avoid file dependencies
-        pdf.set_font("helvetica", "", 12)
-        
-        # Define font styles
-        normal_style = FontFace(emphasis="")
-        bold_style = FontFace(emphasis="BOLD")
-        
-        # Add title
-        pdf.set_font("helvetica", "B", 14)
-        pdf.cell(200, 10, text="Kcube Pricing Report", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 12)
-        pdf.cell(200, 10, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add configuration
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(200, 10, text="Configuration Parameters", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # Set professional styling
         pdf.set_font("helvetica", "", 10)
-        
-        config_items = [
-            f"Agent Count: {config['agent_count']}",
-            f"Time Period: {config['time_period']}",
-            f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)",
-            f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}",
-            f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}",
-            f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}"
-        ]
-        
-        for item in config_items:
-            pdf.cell(200, 8, text=item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Get exchange rate from config (assuming it's passed or default to 87)
+        line_height = 6
         exchange_rate = config.get('exchange_rate', 87.0)
+        show_inr = config.get('show_inr', False)
         
-        # Add optimal pricing model
-        pdf.ln(10)
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(200, 10, text="Optimal Pricing Model", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # --- Header ---
+        pdf.set_font("helvetica", "B", 16)
+        pdf.cell(0, 10, "Eva GenAI Platform - Pricing Analysis", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(0, line_height, f"Prepared for: {config.get('client_name', 'Client')}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
+        pdf.cell(0, line_height, f"Report Date: {date.today().strftime('%B %d, %Y')}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        if show_inr:
+            pdf.cell(0, line_height, f"Conversion Rate: 1 USD = INR {exchange_rate:.2f}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Extract costs from numeric table
-        time_period_key = 'Monthly' if config['time_period'] == 'Monthly' else 'Yearly'
-        fixed_cost = numeric_table[numeric_table['Metric'] == 'Total Cost (Excl. Implementation)']['Fixed_' + time_period_key + '_Value'].values[0]
-        payg_cost = numeric_table[numeric_table['Metric'] == 'Total Cost (Excl. Implementation)']['PAYG_' + time_period_key + '_Value'].values[0]
+        # --- Executive Summary ---
+        pdf.ln(5)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, line_height, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
+        # Get costs
+        period = config['time_period']
+        fixed_cost = numeric_table[numeric_table['Metric'] == 'Total Cost (Excl. Implementation)'][f'Fixed_{period}_Value'].values[0]
+        payg_cost = numeric_table[numeric_table['Metric'] == 'Total Cost (Excl. Implementation)'][f'PAYG_{period}_Value'].values[0]
+        
+        # Format recommendation
         if payg_cost < fixed_cost:
             savings = fixed_cost - payg_cost
-            pdf.multi_cell(0, 8, text=f"Recommended: Pay-As-You-Go (Saves ${savings:.2f} or INR {int(savings*exchange_rate)} {config['time_period'].lower()})", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            rec_text = f"Recommended: Pay-As-You-Go (Saves ${savings:,.2f}"
+            if show_inr:
+                rec_text += f" or INR {savings*exchange_rate:,.2f}"
         else:
             savings = payg_cost - fixed_cost
-            pdf.multi_cell(0, 8, text=f"Recommended: Fixed Pricing (Saves ${savings:.2f} or INR {int(savings*exchange_rate)} {config['time_period'].lower()})", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            rec_text = f"Recommended: Fixed Pricing (Saves ${savings:,.2f}"
+            if show_inr:
+                rec_text += f" or INR {savings*exchange_rate:,.2f}"
         
-        pdf.multi_cell(0, 8, text=f"Implementation Cost: $15000.00 or INR {int(15000*exchange_rate)} (one-time)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(0, line_height, f"Optimal Pricing Model for {config['agent_count']} Agents:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(0, line_height, rec_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add cost breakdown
-        pdf.ln(10)
+        impl_cost_text = f"Implementation Cost: $15,000.00"
+        if show_inr:
+            impl_cost_text += f" or INR {15000*exchange_rate:,.2f}"
+        impl_cost_text += " (one-time)"
+        pdf.cell(0, line_height, impl_cost_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Divider
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(2)
+        
+        # --- Agent Metrics ---
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(40, line_height, "Agent's:", border=0)
+        pdf.cell(20, line_height, str(config['agent_count']), border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        pdf.cell(40, line_height, "Total Minutes:", border=0)
+        pdf.cell(20, line_height, f"{config['agent_count'] * config['minutes_per_agent']:.0f}", border=0, 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        pdf.cell(40, line_height, "Total Hours:", border=0)
+        pdf.cell(20, line_height, f"{(config['agent_count'] * config['minutes_per_agent'])/60:.0f}", border=0,
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        pdf.ln(5)
+        
+        # --- Detailed Cost Comparison ---
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(200, 10, text="Detailed Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, line_height, "Detailed Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Define table structure based on INR setting
+        if show_inr:
+            col_widths = [60, 25, 25, 25, 25]  # Component, Fixed USD, Fixed INR, PayG USD, PayG INR
+        else:
+            col_widths = [80, 40, 40]  # Component, Fixed USD, PayG USD
+        
+        pdf.set_fill_color(200, 220, 255)
+        pdf.set_font("helvetica", "B", 9)
+        
+        # Header rows
+        if show_inr:
+            # Header row 1 (INR ON)
+            pdf.cell(col_widths[0], line_height, "Cost Component", border=1, fill=True)
+            pdf.cell(col_widths[1]+col_widths[2], line_height, "Fixed", border=1, fill=True, align='C')
+            pdf.cell(col_widths[3]+col_widths[4], line_height, "PayG", border=1, fill=True, align='C', 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            
+            # Header row 2 (INR ON)
+            pdf.cell(col_widths[0], line_height, "", border=1, fill=True)
+            pdf.cell(col_widths[1], line_height, "USD", border=1, fill=True, align='C')
+            pdf.cell(col_widths[2], line_height, "INR", border=1, fill=True, align='C')
+            pdf.cell(col_widths[3], line_height, "USD", border=1, fill=True, align='C')
+            pdf.cell(col_widths[4], line_height, "INR", border=1, fill=True, align='C', 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        else:
+            # Single header row (INR OFF)
+            pdf.cell(col_widths[0], line_height, "Cost Component", border=1, fill=True)
+            pdf.cell(col_widths[1], line_height, "Fixed (USD)", border=1, fill=True, align='C')
+            pdf.cell(col_widths[2], line_height, "PayG (USD)", border=1, fill=True, align='C', 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Table content
+        cost_components = [
+            "In/Out Bound Telephony Cost *",
+            "AI Costs",
+            "Tech Infra",
+            "Operational & Support Cost",
+            "Implementation Cost",
+            "Chat Agent",
+            "Email Agent",
+            "Total Cost (Excl. Implementation)"
+        ]
+        
+        pdf.set_font("helvetica", "", 8)
+        for comp in cost_components:
+            # Get values from numeric table
+            row = numeric_table[numeric_table['Metric'] == comp]
+            
+            # Fixed values
+            if not row.empty:
+                fixed_val = row[f'Fixed_{period}_Value'].values[0]
+                if pd.isna(fixed_val):
+                    fixed_usd = fixed_inr = "Included"
+                else:
+                    fixed_usd = f"${fixed_val:,.2f}" if fixed_val != 0 else "-"
+                    fixed_inr = f"INR {fixed_val*exchange_rate:,.2f}" if fixed_val != 0 else "-"
+            else:
+                fixed_usd = fixed_inr = "Included" if comp in ["AI Costs", "Tech Infra", "Operational & Support Cost"] else "-"
+            
+            # PayG values
+            if not row.empty:
+                payg_val = row[f'PAYG_{period}_Value'].values[0]
+                if pd.isna(payg_val):
+                    payg_usd = payg_inr = "Included"
+                else:
+                    payg_usd = f"${payg_val:,.2f}" if payg_val != 0 else "-"
+                    payg_inr = f"INR {payg_val*exchange_rate:,.2f}" if payg_val != 0 else "-"
+            else:
+                payg_usd = payg_inr = "Included" if comp in ["AI Costs", "Tech Infra", "Operational & Support Cost"] else "-"
+            
+            # Special cases
+            if comp == "Implementation Cost":
+                fixed_usd = payg_usd = "$15,000.00"
+                fixed_inr = payg_inr = f"INR {15000*exchange_rate:,.2f}"
+            
+            # Draw row
+            pdf.cell(col_widths[0], line_height, comp, border=1)
+            
+            if show_inr:
+                pdf.cell(col_widths[1], line_height, fixed_usd, border=1, align='C')
+                pdf.cell(col_widths[2], line_height, fixed_inr, border=1, align='C')
+                pdf.cell(col_widths[3], line_height, payg_usd, border=1, align='C')
+                pdf.cell(col_widths[4], line_height, payg_inr, border=1, align='C', 
+                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            else:
+                pdf.cell(col_widths[1], line_height, fixed_usd, border=1, align='C')
+                pdf.cell(col_widths[2], line_height, payg_usd, border=1, align='C', 
+                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Footer note
+        pdf.set_font("helvetica", "I", 8)
+        pdf.cell(0, line_height, "* Outbound dialing adds 10% to base telephony cost", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # --- Cost Comparison ---
+        pdf.ln(5)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, line_height, "Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
         
-        # Set column widths based on content
-        col_widths = [70, 65, 65]  # Metric, Fixed, PAYG
+        if show_inr:
+            pdf.cell(0, line_height, f"Fixed: ${fixed_cost:,.2f} or INR {fixed_cost*exchange_rate:,.2f}", 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, line_height, f"PayG: ${payg_cost:,.2f} or INR {payg_cost*exchange_rate:,.2f}", 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        else:
+            pdf.cell(0, line_height, f"Fixed: ${fixed_cost:,.2f}", 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, line_height, f"PayG: ${payg_cost:,.2f}", 
+                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add table headers
-        pdf.cell(col_widths[0], 10, text="Cost Component", border=1)
-        pdf.cell(col_widths[1], 10, text="Fixed", border=1)
-        pdf.cell(col_widths[2], 10, text="PayG", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add table rows
-        time_period = config['time_period']
-        for _, row in display_table.iterrows():
-            metric = str(row['Metric'])[:30]  # Limit to 30 chars
-            
-            # Format Fixed value
-            fixed_value = str(row[f'Fixed_{time_period}'])
-            if '$' in fixed_value:
-                usd = float(re.sub(r'[^\d.]', '', fixed_value.split('$')[1].split(' ')[0]))
-                fixed_value = f"${usd:.2f} or INR {int(usd*exchange_rate)}"
-            
-            # Format PAYG value
-            payg_value = str(row[f'PAYG_{time_period}'])
-            if '$' in payg_value:
-                usd = float(re.sub(r'[^\d.]', '', payg_value.split('$')[1].split(' ')[0]))
-                payg_value = f"${usd:.2f} or INR {int(usd*exchange_rate)}"
-            
-            # Remove commas from numbers
-            metric = metric.replace(',', '')
-            fixed_value = fixed_value.replace(',', '')
-            payg_value = payg_value.replace(',', '')
-            
-            pdf.cell(col_widths[0], 10, text=metric, border=1)
-            pdf.cell(col_widths[1], 10, text=fixed_value, border=1)
-            pdf.cell(col_widths[2], 10, text=payg_value, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add notes section
-        pdf.ln(10)
+        # --- Recommendation ---
+        pdf.ln(2)
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(200, 10, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, line_height, "Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
-        for line in notes.split('\n'):
-            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        for line in recommendation.split('\n'):
+            pdf.multi_cell(0, line_height, line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # --- Notes ---
+        pdf.ln(2)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, line_height, "Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 9)
+        notes_lines = [
+            "* Outbound dialing adds 10% to base telephony cost (Customer must provide their own dialer)",
+            "- Chat Agent Cost: Tiered pricing (1000: $240, 5000: $240, 10000: $480, 25000: $1200, 50000: $2400)",
+            "- Email Agent Cost: $1200 for 20000 emails ($0.06 per additional email)",
+            "- Implementation cost is $15000 (one-time)",
+            f"- Standard agent time: {config['minutes_per_agent']} minutes/month ({(config['minutes_per_agent']/60):.1f} hours)",
+            f"- Report generated on {date.today().strftime('%Y-%m-%d')}"
+        ]
+        for note in notes_lines:
+            pdf.multi_cell(0, line_height, note, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
