@@ -730,7 +730,7 @@ def main():
             'email_volume': email_volume,
             'minutes_per_agent': minutes_per_agent,
             'analysis_years': analysis_years,
-            'growth_rate': growth_rate
+            'growth_rate': growth_rate,
             'show_inr': show_inr,  # From your Streamlit toggle
             'inr_rate': usd_to_inr  # From your Streamlit number input
         }
