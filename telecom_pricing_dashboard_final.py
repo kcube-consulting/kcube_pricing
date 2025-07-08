@@ -860,7 +860,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("""
+    footer_note = f"""
     **Note:**  
     <span style="color: red;">*</span>**Outbound dialing:** adds 10% to the base telephony cost (Customer must provide their own dialer)  
     - **Chat Agent Cost:** Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)  
@@ -868,7 +868,9 @@ def main():
     - **Implementation cost:** $15,000 (one-time)  
     - **Standard agent time:** {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)  
     <small>Report generated on {date.today().strftime('%Y-%m-%d')}</small>  
-    """.format(minutes_per_agent=minutes_per_agent), unsafe_allow_html=True)
+    """
+    st.markdown(footer_note, unsafe_allow_html=True)
+    
     
 if __name__ == "__main__":
     main()
