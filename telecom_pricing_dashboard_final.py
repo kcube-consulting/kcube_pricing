@@ -40,10 +40,14 @@ def extract_cost(value):
         return float(num_str) if num_str else 0.0
     return 0.0
 
-def format_currency(value, show_inr, exchange_rate):
-    if show_inr:
-        return f"${value:,.2f} (₹{value*exchange_rate:,.2f})"
-    return f"${value:,.2f}"
+def format_currency(value, show_inr=False, exchange_rate=85.0):
+    try:
+        value = float(value)
+        if show_inr:
+            return f"${value:,.2f} (₹{value*exchange_rate:,.2f})"
+        return f"${value:,.2f}"
+    except (ValueError, TypeError):
+        return "N/A"
 
 def calculate_chat_cost(sessions):
     if sessions <= 1000: return DEFAULT_CHAT_COSTS[1000] * (sessions/1000)
@@ -57,7 +61,6 @@ def calculate_email_cost(emails):
 
 def get_pdf_download_link(pdf, filename):
     try:
-        from io import BytesIO
         pdf_bytes = BytesIO()
         pdf.output(pdf_bytes)
         pdf_bytes = pdf_bytes.getvalue()
@@ -75,24 +78,23 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
         
-        # Get conversion rate if INR enabled - default to 85 if not specified
+        # Get conversion rate if INR enabled
         inr_rate = float(config.get('inr_rate', 85.0))
         show_inr = bool(config.get('show_inr', False))
         
-        def format_currency(value, is_inr=False):
-            """Helper to format currency values with safe handling"""
+        def format_currency_pdf(value, is_currency=True):
+            """Helper to format values for PDF with safe handling"""
             try:
                 value = float(value)
                 if pd.isna(value) or value == 0:
                     return "N/A"
-                if is_inr and show_inr:
-                    return f"INR {value*inr_rate:,.2f}"
-                return f"${value:,.2f}"
+                if is_currency and show_inr:
+                    return f"${value:,.2f}\nINR {value*inr_rate:,.2f}"
+                return f"${value:,.2f}" if is_currency else f"{value:,.0f}"
             except (ValueError, TypeError):
                 return "N/A"
 
         # ========== HEADER SECTION ========== #
-        # Premium header with accent line
         pdf.set_y(20)
         pdf.set_font("helvetica", "B", 20)
         pdf.set_text_color(0, 51, 102)  # Dark blue
@@ -139,24 +141,14 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.set_x(15)
             pdf.set_font("helvetica", "", 10)
             if payg_cost < fixed_cost:
-                rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency(savings)}"
-                if show_inr:
-                    rec_text += f" / {format_currency(savings, True)} monthly)"
-                else:
-                    rec_text += " monthly)"
+                rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency_pdf(savings)} monthly)"
                 pdf.multi_cell(0, 6, rec_text, align='L')
             else:
-                rec_text = f"Recommended: Fixed Pricing (Saves {format_currency(savings)}"
-                if show_inr:
-                    rec_text += f" / {format_currency(savings, True)} monthly)"
-                else:
-                    rec_text += " monthly)"
+                rec_text = f"Recommended: Fixed Pricing (Saves {format_currency_pdf(savings)} monthly)"
                 pdf.multi_cell(0, 6, rec_text, align='L')
             
             pdf.set_x(15)
-            imp_text = f"Implementation Cost: $15,000 (one-time)"
-            if show_inr:
-                imp_text += f" / INR {15000*inr_rate:,.0f}"
+            imp_text = f"Implementation Cost: {format_currency_pdf(IMPLEMENTATION_COST)} (one-time)"
             pdf.multi_cell(0, 6, imp_text, align='L')
         except (ValueError, TypeError, IndexError) as e:
             pdf.set_x(15)
@@ -175,8 +167,8 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         payg_fill = (245, 230, 230)   # Light red
         border_color = (200, 200, 200)
         
-        # Column widths (wider for potential INR values)
-        col_widths = [70, 50, 50] if not show_inr else [70, 40, 40]
+        # Column widths
+        col_widths = [70, 60, 60]
         
         # Header row
         pdf.set_fill_color(*header_fill)
@@ -192,22 +184,11 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
                 fill_color = (255, 255, 255) if i % 2 == 0 else (245, 245, 245)
                 
                 metric = str(row['Metric'])[:25]
-                fixed = str(row[f'Fixed_{config["time_period"]}'])
-                payg = str(row[f'PAYG_{config["time_period"]}'])
+                time_period = config['time_period']
+                fixed = str(row[f'Fixed_{time_period}'])
+                payg = str(row[f'PAYG_{time_period}'])
                 
-                # Add INR values if enabled
-                if show_inr and i < len(numeric_table):
-                    try:
-                        fixed_val = float(numeric_table.iloc[i]['Fixed_Monthly_Value'])
-                        payg_val = float(numeric_table.iloc[i]['PAYG_Monthly_Value'])
-                        if not pd.isna(fixed_val) and fixed_val != 0 and "Included" not in fixed and "Not enabled" not in fixed:
-                            fixed += f"\nINR {fixed_val*inr_rate:,.2f}"
-                        if not pd.isna(payg_val) and payg_val != 0 and "Included" not in payg and "Not enabled" not in payg:
-                            payg += f"\nINR {payg_val*inr_rate:,.2f}"
-                    except:
-                        pass
-                
-                # Metric cell
+                # Metric cell (no currency formatting for agents)
                 pdf.set_fill_color(*fill_color)
                 pdf.set_text_color(0, 0, 0)
                 pdf.set_font("helvetica", "B" if i == len(display_table)-1 else "", 9)
@@ -259,35 +240,29 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.cell(0, 10, "Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
             # Create simple bar chart
-            chart_height = 40
+            chart_height = 30
+            chart_width = 150
+            start_x = 40
+            start_y = pdf.get_y()
             
             # Fixed Pricing bar
-            fixed_width = (fixed_cost / max_value) * 150 if max_value != 0 else 0
+            fixed_width = (fixed_cost / max_value) * chart_width if max_value != 0 else 0
             pdf.set_fill_color(50, 150, 50)  # Green
-            pdf.rect(40, pdf.get_y(), fixed_width, chart_height/2, style='F')
-            pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 5)
+            pdf.rect(start_x, start_y, fixed_width, chart_height/2, style='F')
+            pdf.set_xy(start_x + fixed_width + 5, start_y + 2)
             pdf.set_font("helvetica", "B", 10)
-            pdf.cell(0, 5, f"Fixed: {format_currency(fixed_cost)}")
-            if show_inr:
-                pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 10)
-                pdf.cell(0, 5, f"INR {fixed_cost*inr_rate:,.2f}")
+            pdf.cell(0, 5, f"Fixed: {format_currency_pdf(fixed_cost)}")
             
             # Pay-As-You-Go bar
-            payg_width = (payg_cost / max_value) * 150 if max_value != 0 else 0
+            payg_width = (payg_cost / max_value) * chart_width if max_value != 0 else 0
             pdf.set_fill_color(150, 50, 50)  # Red
-            pdf.rect(40, pdf.get_y() + chart_height/2 + 5, payg_width, chart_height/2, style='F')
-            pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 10)
-            pdf.cell(0, 5, f"PayG: {format_currency(payg_cost)}")
-            if show_inr:
-                pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 15)
-                pdf.cell(0, 5, f"INR {payg_cost*inr_rate:,.2f}")
+            pdf.rect(start_x, start_y + chart_height/2 + 5, payg_width, chart_height/2, style='F')
+            pdf.set_xy(start_x + payg_width + 5, start_y + chart_height/2 + 7)
+            pdf.cell(0, 5, f"PayG: {format_currency_pdf(payg_cost)}")
             
-            # Y-axis label
-            pdf.set_xy(30, pdf.get_y() + chart_height/4)
-            pdf.set_font("helvetica", "", 8)
-            pdf.cell(0, 5, f"{format_currency(max_value)}", align='R')
             pdf.ln(chart_height + 15)
-        except:
+        except Exception as e:
+            logger.error(f"Visual comparison failed: {str(e)}")
             pdf.set_font("helvetica", "", 10)
             pdf.multi_cell(0, 6, "Visual comparison not available due to data issues", align='L')
             pdf.ln(10)
@@ -309,14 +284,6 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             if line.strip():
                 pdf.set_x(15)
                 pdf.multi_cell(0, 6, line.strip(), align='L')
-        
-        pdf.ln(15)
-        
-        # ========== FOOTER ========== #
-        pdf.set_font("helvetica", "I", 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 5, "Confidential - For internal use only", align='L')
-        pdf.cell(0, 5, f"Page 1 of 1", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
@@ -357,14 +324,16 @@ def generate_excel_report(config, numeric_table, display_table, recommendation, 
         summary_sheet.write(7, 1, config['analysis_years'])
         summary_sheet.write(8, 0, 'Growth Rate')
         summary_sheet.write(8, 1, f"{config['growth_rate']*100:.1f}%")
+        summary_sheet.write(9, 0, 'Client Name')
+        summary_sheet.write(9, 1, config.get('client_name', 'Client'))
         
         # Write recommendation
-        summary_sheet.write(10, 0, 'Recommendation')
-        summary_sheet.write(11, 0, recommendation.replace('\n', ' '))
+        summary_sheet.write(11, 0, 'Recommendation')
+        summary_sheet.write(12, 0, recommendation.replace('\n', ' '))
         
         # Write notes
-        summary_sheet.write(13, 0, 'Notes')
-        summary_sheet.write(14, 0, notes.replace('\n', ' '))
+        summary_sheet.write(14, 0, 'Notes')
+        summary_sheet.write(15, 0, notes.replace('\n', ' '))
     
     return output.getvalue()
 
@@ -543,16 +512,16 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
     ]
     
     # Calculate values first (numeric)
-    fixed_monthly_cost = float(fixed['MonthlyCost'].values[0])
-    payg_monthly_cost = float(payg['MonthlyCost'].values[0])
+    fixed_monthly_cost = float(fixed['MonthlyCost'].values[0]) if not fixed.empty else 0
+    payg_monthly_cost = float(payg['MonthlyCost'].values[0]) if not payg.empty else 0
     
     # Create numeric dataframe for calculations
     numeric_data = {
         'Metric': metrics,
         'Fixed_Monthly_Value': [
-            fixed['Agents'].values[0],
-            minutes_per_agent * fixed['Agents'].values[0],
-            round(minutes_per_agent * fixed['Agents'].values[0] / 60, 1),
+            fixed['Agents'].values[0] if not fixed.empty else 0,
+            minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0),
+            round(minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0) / 60, 1),
             fixed_monthly_cost * 0.9,
             np.nan,  # For "Included" items
             np.nan,
@@ -563,9 +532,9 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
             fixed_monthly_cost
         ],
         'PAYG_Monthly_Value': [
-            payg['Agents'].values[0],
-            minutes_per_agent * payg['Agents'].values[0],
-            round(minutes_per_agent * payg['Agents'].values[0] / 60, 1),
+            payg['Agents'].values[0] if not payg.empty else 0,
+            minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0),
+            round(minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0) / 60, 1),
             payg_monthly_cost * 0.9,
             np.nan,
             np.nan,
@@ -581,9 +550,9 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
     display_data = {
         'Metric': metrics,
         'Fixed_Monthly': [
-            str(fixed['Agents'].values[0]),
-            f"{minutes_per_agent * fixed['Agents'].values[0]:,.0f}",
-            f"{round(minutes_per_agent * fixed['Agents'].values[0] / 60, 1):,.1f}",
+            str(fixed['Agents'].values[0]) if not fixed.empty else "0",
+            f"{minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0):,.0f}",
+            f"{round(minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0) / 60, 1):,.1f}",
             f"${fixed_monthly_cost * 0.9:,.2f}{'*' if outbound_toggle else ''}",
             "Included",
             "Included",
@@ -591,12 +560,12 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
             "$15,000 (One-time)",
             f"${calculate_chat_cost(chat_sessions):,.2f}" if chat_sessions > 0 else "Not enabled",
             f"${calculate_email_cost(email_volume):,.2f}" if email_volume > 0 else "Not enabled",
-            f"${fixed_monthly_cost:,.2f}"
+            f"${fixed_monthly_cost:,.2f}" if fixed_monthly_cost else "N/A"
         ],
         'PAYG_Monthly': [
-            str(payg['Agents'].values[0]),
-            f"{minutes_per_agent * payg['Agents'].values[0]:,.0f}",
-            f"{round(minutes_per_agent * payg['Agents'].values[0] / 60, 1):,.1f}",
+            str(payg['Agents'].values[0]) if not payg.empty else "0",
+            f"{minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0):,.0f}",
+            f"{round(minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0) / 60, 1):,.1f}",
             f"${payg_monthly_cost * 0.9:,.2f}{'*' if outbound_toggle else ''}",
             "Included",
             "Included",
@@ -604,12 +573,12 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
             "$15,000 (One-time)",
             f"${calculate_chat_cost(chat_sessions):,.2f}" if chat_sessions > 0 else "Not enabled",
             f"${calculate_email_cost(email_volume):,.2f}" if email_volume > 0 else "Not enabled",
-            f"${payg_monthly_cost:,.2f}"
+            f"${payg_monthly_cost:,.2f}" if payg_monthly_cost else "N/A"
         ],
         'Fixed_Yearly': [
-            str(fixed['Agents'].values[0]),
-            f"{minutes_per_agent * fixed['Agents'].values[0] * 12:,.0f}",
-            f"{round(minutes_per_agent * fixed['Agents'].values[0] * 12 / 60, 1):,.1f}",
+            str(fixed['Agents'].values[0]) if not fixed.empty else "0",
+            f"{minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0) * 12:,.0f}",
+            f"{round(minutes_per_agent * (fixed['Agents'].values[0] if not fixed.empty else 0) * 12 / 60, 1):,.1f}",
             f"${fixed_monthly_cost * 0.9 * 12:,.2f}{'*' if outbound_toggle else ''}",
             "Included",
             "Included",
@@ -617,12 +586,12 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
             "$15,000 (One-time)",
             f"${calculate_chat_cost(chat_sessions) * 12:,.2f}" if chat_sessions > 0 else "Not enabled",
             f"${calculate_email_cost(email_volume) * 12:,.2f}" if email_volume > 0 else "Not enabled",
-            f"${fixed_monthly_cost * 12:,.2f}"
+            f"${fixed_monthly_cost * 12:,.2f}" if fixed_monthly_cost else "N/A"
         ],
         'PAYG_Yearly': [
-            str(payg['Agents'].values[0]),
-            f"{minutes_per_agent * payg['Agents'].values[0] * 12:,.0f}",
-            f"{round(minutes_per_agent * payg['Agents'].values[0] * 12 / 60, 1):,.1f}",
+            str(payg['Agents'].values[0]) if not payg.empty else "0",
+            f"{minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0) * 12:,.0f}",
+            f"{round(minutes_per_agent * (payg['Agents'].values[0] if not payg.empty else 0) * 12 / 60, 1):,.1f}",
             f"${payg_monthly_cost * 0.9 * 12:,.2f}{'*' if outbound_toggle else ''}",
             "Included",
             "Included",
@@ -630,7 +599,7 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
             "$15,000 (One-time)",
             f"${calculate_chat_cost(chat_sessions) * 12:,.2f}" if chat_sessions > 0 else "Not enabled",
             f"${calculate_email_cost(email_volume) * 12:,.2f}" if email_volume > 0 else "Not enabled",
-            f"${payg_monthly_cost * 12:,.2f}"
+            f"${payg_monthly_cost * 12:,.2f}" if payg_monthly_cost else "N/A"
         ]
     }
     
@@ -654,7 +623,7 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Controls")
-        # Set default INR rate to 85 as requested
+        client_name = st.text_input("Client Name", "Client")
         usd_to_inr = st.number_input("USD to INR Exchange Rate", min_value=1.0, value=85.0, step=0.5)
         show_inr = st.toggle("Show INR Pricing", value=False)
         
@@ -707,7 +676,7 @@ def main():
         outbound_toggle, minutes_per_agent
     )
 
-    # Prepare configuration for PDF report
+    # Prepare configuration for reports
     config = {
         'agent_count': selected_agent,
         'time_period': time_period,
@@ -719,10 +688,10 @@ def main():
         'growth_rate': growth_rate,
         'inr_rate': float(usd_to_inr),
         'show_inr': bool(show_inr),
-        'client_name': "Client"
+        'client_name': client_name
     }
 
-    # Generate recommendation
+    # Get costs for selected agent
     try:
         fixed_cost = processed_df[(processed_df['Agents'] == selected_agent) & 
                                 (processed_df['Option'] == 'Fixed Pricing')][f"{time_period}Cost"].values[0]
@@ -761,9 +730,6 @@ def main():
     - Standard agent time: {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)
     """
 
-    # Generate the PDF report
-    pdf_report = generate_pdf_report(config, numeric_table, display_table, recommendation, notes)
-    
     # Create tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cost Comparison", "📝 Detailed Breakdown", "⚖️ Breakeven Analysis", "📈 Multi-Year Projection", "📁 Raw Data"])
 
@@ -772,9 +738,9 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Fixed Pricing Cost", f"${fixed_cost:,.2f}" + (f" (INR {fixed_cost*usd_to_inr:,.2f})" if show_inr else ""))
+            st.metric("Fixed Pricing Cost", format_currency(fixed_cost, show_inr, usd_to_inr))
         with col2:
-            st.metric("Pay-As-You-Go Cost", f"${payg_cost:,.2f}" + (f" (INR {payg_cost*usd_to_inr:,.2f})" if show_inr else ""))
+            st.metric("Pay-As-You-Go Cost", format_currency(payg_cost, show_inr, usd_to_inr))
         
         cost_comparison_fig = px.bar(
             processed_df,
@@ -813,11 +779,16 @@ def main():
         st.dataframe(display_df, hide_index=True, use_container_width=True)
         
         st.markdown("### 📄 Export Detailed Report")
-        if pdf_report:
-            pdf_link = get_pdf_download_link(pdf_report, f"kcube_pricing_{selected_agent}_agents.pdf")
+        pdf_link, excel_link = get_report_download_links(
+            config, numeric_table, display_table, 
+            fixed_cost, payg_cost, time_period
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
             st.markdown(pdf_link, unsafe_allow_html=True)
-        else:
-            st.error("PDF report not available")
+        with col2:
+            st.markdown(excel_link, unsafe_allow_html=True)
 
     with tab3:
         st.markdown(f"### ⚖️ Breakeven Analysis{'*' if outbound_toggle else ''}")
@@ -840,7 +811,7 @@ def main():
                 st.metric(
                     "Months to Breakeven",
                     f"{breakeven_months} months",
-                    delta=f"Saves ${savings:,.2f} {time_period.lower()}",
+                    delta=f"Saves {format_currency(savings, show_inr, usd_to_inr)} {time_period.lower()}",
                     delta_color="inverse" if breakeven_months > 12 else "normal"
                 )
                 
@@ -883,8 +854,8 @@ def main():
                                      (processed_df['Option'] == 'Pay-As-You-Go')]['YearlyCost'].values[0]
 
             years = list(range(1, analysis_years + 1))
-            fixed_costs = [fixed_yearly * ((1 + growth_rate) ** year) for year in range(analysis_years)]
-            payg_costs = [payg_yearly * ((1 + growth_rate) ** year) for year in range(analysis_years)]
+            fixed_costs = calculate_multi_year_costs(fixed_yearly, analysis_years, growth_rate)
+            payg_costs = calculate_multi_year_costs(payg_yearly, analysis_years, growth_rate)
 
             fig = make_subplots(specs=[[{"secondary_y": True}]], 
                               subplot_titles=("Cumulative Costs", "Annual Costs"))
