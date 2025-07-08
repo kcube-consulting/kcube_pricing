@@ -53,9 +53,16 @@ def calculate_email_cost(emails):
     return DEFAULT_EMAIL_COST * (emails/20000) if emails <= 20000 else DEFAULT_EMAIL_COST + (emails-20000)*0.06
 
 def get_pdf_download_link(pdf, filename):
-    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-    b64 = base64.b64encode(pdf_bytes).decode()
-    return f'<a href="data:application/pdf;base64,{b64}" download="{filename}">Download PDF Report</a>'
+    try:
+        from io import BytesIO
+        pdf_bytes = BytesIO()
+        pdf.output(pdf_bytes)
+        pdf_bytes = pdf_bytes.getvalue()
+        b64 = base64.b64encode(pdf_bytes).decode()
+        return f'<a href="data:application/pdf;base64,{b64}" download="{filename}">Download PDF Report</a>'
+    except Exception as e:
+        logger.error(f"PDF link generation failed: {str(e)}")
+        return "<p style='color:red'>PDF generation failed</p>"
 
 def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
     """Generate a PDF report with pricing details (text only)"""
@@ -84,17 +91,25 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(200, 8, txt="Cost Breakdown", ln=1)
         pdf.set_font("Arial", size=10)
         
+        # Set column widths based on content
+        col_widths = [70, 60, 60]  # Metric, Fixed, PAYG
+        
         # Add table headers
-        pdf.cell(70, 8, txt="Metric", border=1)
-        pdf.cell(60, 8, txt="Fixed Pricing", border=1)
-        pdf.cell(60, 8, txt="Pay-As-You-Go", border=1, ln=1)
+        pdf.cell(col_widths[0], 8, txt="Metric", border=1)
+        pdf.cell(col_widths[1], 8, txt="Fixed Pricing", border=1)
+        pdf.cell(col_widths[2], 8, txt="Pay-As-You-Go", border=1, ln=1)
         
         # Add table rows
         time_period = config['time_period']
         for _, row in display_table.iterrows():
-            pdf.cell(70, 8, txt=str(row['Metric']), border=1)
-            pdf.cell(60, 8, txt=str(row[f'Fixed_{time_period}']), border=1)
-            pdf.cell(60, 8, txt=str(row[f'PAYG_{time_period}']), border=1, ln=1)
+            # Ensure text fits in cells by truncating if necessary
+            metric = str(row['Metric'])[:30]  # Limit to 30 chars
+            fixed = str(row[f'Fixed_{time_period}'])[:25]  # Limit to 25 chars
+            payg = str(row[f'PAYG_{time_period}'])[:25]  # Limit to 25 chars
+            
+            pdf.cell(col_widths[0], 8, txt=metric, border=1)
+            pdf.cell(col_widths[1], 8, txt=fixed, border=1)
+            pdf.cell(col_widths[2], 8, txt=payg, border=1, ln=1)
         
         # Add recommendation
         pdf.ln(10)
@@ -102,7 +117,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(200, 8, txt="Recommendation", ln=1)
         pdf.set_font("Arial", size=10)
         for line in recommendation.split('\n'):
-            pdf.cell(200, 8, txt=line.strip(), ln=1)
+            pdf.multi_cell(0, 8, txt=line.strip(), ln=1)
         
         # Add notes
         pdf.ln(5)
@@ -110,7 +125,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(200, 8, txt="Notes", ln=1)
         pdf.set_font("Arial", size=10)
         for line in notes.split('\n'):
-            pdf.cell(200, 8, txt=line.strip(), ln=1)
+            pdf.multi_cell(0, 8, txt=line.strip(), ln=1)
         
         return pdf
         
@@ -118,7 +133,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
         return None
-
+        
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
     output = BytesIO()
