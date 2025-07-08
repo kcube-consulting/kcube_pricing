@@ -67,22 +67,17 @@ def get_pdf_download_link(pdf, filename):
         logger.error(f"PDF link generation failed: {str(e)}")
         return "<p style='color:red'>PDF generation failed</p>"
 
+
 def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
     """Generate a premium consulting-style PDF report with visual impact"""
     try:
         # Initialize PDF with professional settings
         pdf = FPDF()
-        
-        # Add a Unicode font that supports the rupee symbol
-        pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
-        pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
-        pdf.add_font("DejaVu", "I", "DejaVuSans-Oblique.ttf", uni=True)
-        
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
         
         # Get conversion rate if INR enabled
-        inr_rate = config.get('inr_rate', 75)  # Default to 75 if not specified
+        inr_rate = config.get('inr_rate', 85)  # Default to 85 if not specified
         show_inr = config.get('show_inr', False)
         
         def format_currency(value, is_inr=False):
@@ -90,13 +85,13 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             if pd.isna(value):
                 return "N/A"
             if is_inr and show_inr:
-                return f"₹{value*inr_rate:,.2f}"
+                return f"INR {value*inr_rate:,.2f}"  # Using "INR" instead of ₹
             return f"${value:,.2f}"
 
         # ========== HEADER SECTION ========== #
         # Premium header with accent line
         pdf.set_y(20)
-        pdf.set_font("DejaVu", "B", 20)
+        pdf.set_font("helvetica", "B", 20)
         pdf.set_text_color(0, 51, 102)  # Dark blue
         pdf.cell(0, 10, "Kcube Consulting Pricing Analysis", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
         
@@ -107,7 +102,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.ln(8)
         
         # Report metadata
-        pdf.set_font("DejaVu", "", 10)
+        pdf.set_font("helvetica", "", 10)
         pdf.set_text_color(100, 100, 100)  # Dark gray
         client_text = f"Prepared for: {config.get('client_name', 'Client')}"
         date_text = f"Report Date: {date.today().strftime('%B %d, %Y')}"
@@ -115,11 +110,11 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(0, 6, date_text, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         if show_inr:
-            pdf.cell(0, 6, f"Conversion Rate: 1 USD = ₹{inr_rate}", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 6, f"Conversion Rate: 1 USD = INR {inr_rate}", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(10)
         
         # ========== EXECUTIVE SUMMARY ========== #
-        pdf.set_font("DejaVu", "B", 14)
+        pdf.set_font("helvetica", "B", 14)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
@@ -129,7 +124,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.rect(10, pdf.get_y(), 190, 30, style='DF')
         
         pdf.set_xy(15, pdf.get_y()+5)
-        pdf.set_font("DejaVu", "B", 12)
+        pdf.set_font("helvetica", "B", 12)
         pdf.multi_cell(0, 6, f"Optimal Pricing Model for {config['agent_count']} Agents:", align='L')
         
         fixed_cost = numeric_table.iloc[-1]['Fixed_Monthly_Value']
@@ -137,9 +132,9 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         savings = abs(fixed_cost - payg_cost)
         
         pdf.set_x(15)
-        pdf.set_font("DejaVu", "", 10)
+        pdf.set_font("helvetica", "", 10)
         if payg_cost < fixed_cost:
-            rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency(savages)}"
+            rec_text = f"Recommended: Pay-As-You-Go (Saves {format_currency(savings)}"
             if show_inr:
                 rec_text += f" / {format_currency(savings, True)} monthly)"
             else:
@@ -156,12 +151,12 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_x(15)
         imp_text = f"Implementation Cost: $15,000 (one-time)"
         if show_inr:
-            imp_text += f" / ₹{15000*inr_rate:,.0f}"
+            imp_text += f" / INR {15000*inr_rate:,.0f}"
         pdf.multi_cell(0, 6, imp_text, align='L')
         pdf.ln(15)
         
         # ========== COST BREAKDOWN ========== #
-        pdf.set_font("DejaVu", "B", 14)
+        pdf.set_font("helvetica", "B", 14)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, "Detailed Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
@@ -177,7 +172,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         # Header row
         pdf.set_fill_color(*header_fill)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("DejaVu", "B", 10)
+        pdf.set_font("helvetica", "B", 10)
         pdf.cell(col_widths[0], 8, "Cost Component", border=1, fill=True, align='L')
         pdf.cell(col_widths[1], 8, "Fixed", border=1, fill=True, align='C')
         pdf.cell(col_widths[2], 8, "PayG", border=1, fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -195,26 +190,26 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
                 fixed_val = numeric_table.iloc[i]['Fixed_Monthly_Value']
                 payg_val = numeric_table.iloc[i]['PAYG_Monthly_Value']
                 if not pd.isna(fixed_val) and fixed_val != 0 and "Included" not in fixed and "Not enabled" not in fixed:
-                    fixed += f"\n₹{fixed_val*inr_rate:,.2f}"
+                    fixed += f"\nINR {fixed_val*inr_rate:,.2f}"
                 if not pd.isna(payg_val) and payg_val != 0 and "Included" not in payg and "Not enabled" not in payg:
-                    payg += f"\n₹{payg_val*inr_rate:,.2f}"
+                    payg += f"\nINR {payg_val*inr_rate:,.2f}"
             
             # Metric cell
             pdf.set_fill_color(*fill_color)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("DejaVu", "B" if i == len(display_table)-1 else "", 9)
+            pdf.set_font("helvetica", "B" if i == len(display_table)-1 else "", 9)
             pdf.cell(col_widths[0], 6, metric, border='LR', fill=True, align='L')
             
             # Fixed Pricing cell
             if "Included" not in fixed and "Not enabled" not in fixed:
                 pdf.set_fill_color(*fixed_fill) if float(numeric_table.iloc[i]['Fixed_Monthly_Value']) < float(numeric_table.iloc[i]['PAYG_Monthly_Value']) else pdf.set_fill_color(*fill_color)
-            pdf.set_font("DejaVu", "B" if "Included" not in fixed and "Not enabled" not in fixed else "", 9)
+            pdf.set_font("helvetica", "B" if "Included" not in fixed and "Not enabled" not in fixed else "", 9)
             pdf.cell(col_widths[1], 6, fixed, border='LR', fill=True, align='C')
             
             # Pay-As-You-Go cell
             if "Included" not in payg and "Not enabled" not in payg:
                 pdf.set_fill_color(*payg_fill) if float(numeric_table.iloc[i]['PAYG_Monthly_Value']) < float(numeric_table.iloc[i]['Fixed_Monthly_Value']) else pdf.set_fill_color(*fill_color)
-            pdf.set_font("DejaVu", "B" if "Included" not in payg and "Not enabled" not in payg else "", 9)
+            pdf.set_font("helvetica", "B" if "Included" not in payg and "Not enabled" not in payg else "", 9)
             pdf.cell(col_widths[2], 6, payg, border='LR', fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
             # Bottom border
@@ -222,13 +217,13 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         
         # Footer note
-        pdf.set_font("DejaVu", "I", 8)
+        pdf.set_font("helvetica", "I", 8)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(0, 5, "* Outbound dialing adds 10% to base telephony cost", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(10)
         
         # ========== VISUAL COMPARISON ========== #
-        pdf.set_font("DejaVu", "B", 14)
+        pdf.set_font("helvetica", "B", 14)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, "Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
@@ -241,11 +236,11 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_fill_color(50, 150, 50)  # Green
         pdf.rect(40, pdf.get_y(), fixed_width, chart_height/2, style='F')
         pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 5)
-        pdf.set_font("DejaVu", "B", 10)
+        pdf.set_font("helvetica", "B", 10)
         pdf.cell(0, 5, f"Fixed: {format_currency(fixed_cost)}")
         if show_inr:
             pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 10)
-            pdf.cell(0, 5, f"₹{fixed_cost*inr_rate:,.2f}")
+            pdf.cell(0, 5, f"INR {fixed_cost*inr_rate:,.2f}")
         
         # Pay-As-You-Go bar
         payg_width = (payg_cost / max_value) * 150
@@ -255,16 +250,16 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(0, 5, f"PayG: {format_currency(payg_cost)}")
         if show_inr:
             pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 15)
-            pdf.cell(0, 5, f"₹{payg_cost*inr_rate:,.2f}")
+            pdf.cell(0, 5, f"INR {payg_cost*inr_rate:,.2f}")
         
         # Y-axis label
         pdf.set_xy(30, pdf.get_y() + chart_height/4)
-        pdf.set_font("DejaVu", "", 8)
+        pdf.set_font("helvetica", "", 8)
         pdf.cell(0, 5, f"{format_currency(max_value)}", align='R')
         pdf.ln(chart_height + 15)
         
         # ========== RECOMMENDATION ========== #
-        pdf.set_font("DejaVu", "B", 14)
+        pdf.set_font("helvetica", "B", 14)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, "Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
@@ -274,7 +269,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.rect(10, pdf.get_y(), 190, 30, style='DF')
         
         pdf.set_xy(15, pdf.get_y()+5)
-        pdf.set_font("DejaVu", "B", 12)
+        pdf.set_font("helvetica", "B", 12)
         pdf.set_text_color(0, 0, 0)
         for line in recommendation.split('\n'):
             if line.strip():
@@ -284,7 +279,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.ln(15)
         
         # ========== FOOTER ========== #
-        pdf.set_font("DejaVu", "I", 8)
+        pdf.set_font("helvetica", "I", 8)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(0, 5, "Confidential - For internal use only", align='L')
         pdf.cell(0, 5, f"Page 1 of 1", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -294,7 +289,8 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None        
+        return None
+        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
@@ -736,8 +732,8 @@ def main():
             'minutes_per_agent': minutes_per_agent,
             'analysis_years': analysis_years,
             'growth_rate': growth_rate,
-            'show_inr': show_inr,  # From your Streamlit toggle
-            'inr_rate': usd_to_inr  # From your Streamlit number input
+            'show_inr': True/False,  # From your toggle
+            'inr_rate': conversion_rate  # From your number input
         }
         
         compare_df = processed_df.pivot_table(
