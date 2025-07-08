@@ -73,28 +73,26 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf = FPDF()
         pdf.add_page()
         
-        # Add a Unicode font (DejaVuSans is a common free font that supports many characters)
-        pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
-        pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
-        pdf.set_font("DejaVu", "", 12)
+        # Use standard PDF core fonts to avoid file dependencies
+        pdf.set_font("helvetica", "", 12)
         
         # Define font styles
         normal_style = FontFace(emphasis="")
         bold_style = FontFace(emphasis="BOLD")
         
         # Add title
-        pdf.set_font("DejaVu", "B", 14)
+        pdf.set_font("helvetica", "B", 14)
         pdf.cell(200, 10, text="Kcube Pricing Report", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("DejaVu", "", 12)
+        pdf.set_font("helvetica", "", 12)
         pdf.cell(200, 10, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add configuration
-        pdf.set_font("DejaVu", "B", 12)
+        pdf.set_font("helvetica", "B", 12)
         pdf.cell(200, 10, text="Configuration Parameters", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("DejaVu", "", 10)
+        pdf.set_font("helvetica", "", 10)
         
         config_items = [
             f"Agent Count: {config['agent_count']}",
@@ -108,8 +106,47 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         for item in config_items:
             pdf.cell(200, 8, text=item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Rest of your PDF generation code...
-        # Make sure to use pdf.set_font() with the DejaVu font for all text
+        # Add cost breakdown
+        pdf.ln(10)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(200, 8, text="Cost Breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 10)
+        
+        # Set column widths based on content
+        col_widths = [70, 60, 60]  # Metric, Fixed, PAYG
+        
+        # Add table headers
+        pdf.cell(col_widths[0], 8, text="Metric", border=1)
+        pdf.cell(col_widths[1], 8, text="Fixed Pricing", border=1)
+        pdf.cell(col_widths[2], 8, text="Pay-As-You-Go", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Add table rows
+        time_period = config['time_period']
+        for _, row in display_table.iterrows():
+            # Ensure text fits in cells by truncating if necessary
+            metric = str(row['Metric'])[:30]  # Limit to 30 chars
+            fixed = str(row[f'Fixed_{time_period}'])[:25]  # Limit to 25 chars
+            payg = str(row[f'PAYG_{time_period}'])[:25]  # Limit to 25 chars
+            
+            pdf.cell(col_widths[0], 8, text=metric, border=1)
+            pdf.cell(col_widths[1], 8, text=fixed, border=1)
+            pdf.cell(col_widths[2], 8, text=payg, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Add recommendation
+        pdf.ln(10)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(200, 8, text="Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 10)
+        for line in recommendation.split('\n'):
+            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Add notes
+        pdf.ln(5)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(200, 8, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", "", 10)
+        for line in notes.split('\n'):
+            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
@@ -117,6 +154,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
         return None
+        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
