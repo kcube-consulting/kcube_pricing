@@ -98,7 +98,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_y(20)
         pdf.set_font("helvetica", "B", 20)
         pdf.set_text_color(0, 51, 102)  # Dark blue
-        pdf.cell(0, 10, "Kcube Consulting Pricing Analysis", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        pdf.cell(0, 10, "Eva GenAI Platform  - Pricing Analysis", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
         
         # Accent line
         pdf.set_draw_color(0, 102, 204)  # Blue accent
@@ -612,7 +612,7 @@ def create_detailed_cost_table(df, agent_count, chat_sessions, email_volume, out
 def main():
     # Configure page
     st.set_page_config(page_title="Kcube Pricing Dashboard", page_icon="📊", layout="wide")
-    st.title("Eva GenAI Platfomr Pricing Options (Fixed & PayG)")
+    st.title("Eva GenAI Platform  - Pricing Options (Fixed & PayG)")
     
     uploaded_file = st.file_uploader("Upload Pricing Excel File", type=["xlsx"])
     if not uploaded_file:
