@@ -700,7 +700,7 @@ def main():
         st.markdown("---")
         st.caption("ℹ️ *Outbound dialing requires customer-provided dialer")
 
-    # Process data and prepare configuration
+    # Process data
     processed_df = process_pricing_data(df, chat_sessions, email_volume, outbound_toggle, minutes_per_agent)
     numeric_table, display_table = create_detailed_cost_table(
         processed_df, selected_agent, chat_sessions, email_volume, 
@@ -717,35 +717,64 @@ def main():
         'email_volume': email_volume,
         'analysis_years': analysis_years,
         'growth_rate': growth_rate,
-        'inr_rate': float(usd_to_inr),  # Using the sidebar input with default 85
+        'inr_rate': float(usd_to_inr),
         'show_inr': bool(show_inr),
-        'client_name': "Client"  # You can make this configurable
+        'client_name': "Client"
     }
+
+    # Generate recommendation
+    try:
+        fixed_cost = processed_df[(processed_df['Agents'] == selected_agent) & 
+                                (processed_df['Option'] == 'Fixed Pricing')][f"{time_period}Cost"].values[0]
+        payg_cost = processed_df[(processed_df['Agents'] == selected_agent) & 
+                               (processed_df['Option'] == 'Pay-As-You-Go')][f"{time_period}Cost"].values[0]
+        
+        if payg_cost < fixed_cost:
+            savings = fixed_cost - payg_cost
+            breakeven = (IMPLEMENTATION_COST / savings) if savings > 0 else 0
+            recommendation = f"""
+            Recommendation for {selected_agent} Agents:
+            - Choose Pay-As-You-Go 
+            - Save ${savings:,.2f} {time_period.lower()}
+            - Breakeven in {breakeven:.1f} months
+            """
+        else:
+            savings = payg_cost - fixed_cost
+            recommendation = f"""
+            Recommendation for {selected_agent} Agents:
+            - Choose Fixed Pricing 
+            - Save ${savings:,.2f} {time_period.lower()}
+            - Immediate savings
+            """
+    except Exception as e:
+        st.error(f"Error generating recommendation: {str(e)}")
+        recommendation = "Could not generate recommendation due to data issues"
+        fixed_cost = 0
+        payg_cost = 0
+
+    # Generate notes
+    notes = f"""
+    *Outbound dialing: adds 10% to the base telephony cost (Customer must provide their own dialer)
+    - Chat Agent Cost: Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)
+    - Email Agent Cost: $1,200 for 20,000 emails ($0.06 per additional email)
+    - Implementation cost: $15,000 (one-time)
+    - Standard agent time: {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)
+    """
 
     # Generate the PDF report
     pdf_report = generate_pdf_report(config, numeric_table, display_table, recommendation, notes)
     
-    # Generate download links
-    if pdf_report:
-        pdf_link = get_pdf_download_link(pdf_report, f"kcube_pricing_{selected_agent}_agents.pdf")
-        st.markdown(pdf_link, unsafe_allow_html=True)
-    else:
-        st.error("Failed to generate PDF report")
-
-    # Display the results in tabs as before
+    # Create tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cost Comparison", "📝 Detailed Breakdown", "⚖️ Breakeven Analysis", "📈 Multi-Year Projection", "📁 Raw Data"])
-    
+
     with tab1:
         st.markdown(f"### 💵 {time_period} Cost Comparison{'*' if outbound_toggle else ''}")
         
-        fixed_cost = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Fixed Pricing')][f"{time_period}Cost"].values[0]
-        payg_cost = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Pay-As-You-Go')][f"{time_period}Cost"].values[0]
-        
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Fixed Pricing Cost", format_currency(fixed_cost, show_inr, usd_to_inr))
+            st.metric("Fixed Pricing Cost", f"${fixed_cost:,.2f}" + (f" (INR {fixed_cost*usd_to_inr:,.2f})" if show_inr else ""))
         with col2:
-            st.metric("Pay-As-You-Go Cost", format_currency(payg_cost, show_inr, usd_to_inr))
+            st.metric("Pay-As-You-Go Cost", f"${payg_cost:,.2f}" + (f" (INR {payg_cost*usd_to_inr:,.2f})" if show_inr else ""))
         
         cost_comparison_fig = px.bar(
             processed_df,
@@ -784,211 +813,193 @@ def main():
         st.dataframe(display_df, hide_index=True, use_container_width=True)
         
         st.markdown("### 📄 Export Detailed Report")
-
-        config = {
-            'inr_rate': float(inr_rate),  
-            'show_inr': bool(show_inr), 
-            'agent_count': selected_agent,
-            'time_period': time_period,
-            'outbound': outbound_toggle,
-            'chat_sessions': chat_sessions,
-            'email_volume': email_volume,
-            'minutes_per_agent': minutes_per_agent,
-            'analysis_years': analysis_years,
-            'growth_rate': growth_rate
-        }
-        
-        compare_df = processed_df.pivot_table(
-            index='Agents',
-            columns='Option',
-            values=f"{time_period}Cost",
-            aggfunc='sum'
-        ).reset_index()
-        compare_df['Savings'] = compare_df['Fixed Pricing'] - compare_df['Pay-As-You-Go']
-        compare_df['Breakeven Months'] = (IMPLEMENTATION_COST / compare_df['Savings']).round(1)
-        
-        pdf_link, excel_link = get_report_download_links(
-            config, numeric_table, display_table, 
-            fixed_cost, payg_cost, time_period
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
+        if pdf_report:
+            pdf_link = get_pdf_download_link(pdf_report, f"kcube_pricing_{selected_agent}_agents.pdf")
             st.markdown(pdf_link, unsafe_allow_html=True)
-        with col2:
-            st.markdown(excel_link, unsafe_allow_html=True)
+        else:
+            st.error("PDF report not available")
 
     with tab3:
         st.markdown(f"### ⚖️ Breakeven Analysis{'*' if outbound_toggle else ''}")
         
-        compare_df = processed_df.pivot_table(
-            index='Agents',
-            columns='Option',
-            values=f"{time_period}Cost",
-            aggfunc='sum'
-        ).reset_index()
-        
-        compare_df['Savings'] = compare_df['Fixed Pricing'] - compare_df['Pay-As-You-Go']
-        compare_df['Breakeven Months'] = (IMPLEMENTATION_COST / compare_df['Savings']).round(1)
-        
-        current_breakeven = compare_df[compare_df['Agents'] == selected_agent]
-        if not current_breakeven.empty:
-            savings = current_breakeven['Savings'].values[0]
-            breakeven_months = current_breakeven['Breakeven Months'].values[0]
+        try:
+            compare_df = processed_df.pivot_table(
+                index='Agents',
+                columns='Option',
+                values=f"{time_period}Cost",
+                aggfunc='sum'
+            ).reset_index()
+            compare_df['Savings'] = compare_df['Fixed Pricing'] - compare_df['Pay-As-You-Go']
+            compare_df['Breakeven Months'] = (IMPLEMENTATION_COST / compare_df['Savings']).round(1)
             
-            st.metric(
-                "Months to Breakeven",
-                f"{breakeven_months} months",
-                delta=f"Saves {format_currency(savings, show_inr, usd_to_inr)} {time_period.lower()}",
-                delta_color="inverse" if breakeven_months > 12 else "normal"
-            )
-            
-            fig = px.line(
-                compare_df,
-                x='Agents',
-                y='Breakeven Months',
-                title=f"Months to Recover Implementation Cost{'*' if outbound_toggle else ''}",
-                markers=True
-            )
-            
-            if outbound_toggle:
-                fig.update_layout(
-                    annotations=[
-                        dict(
-                            x=0.5,
-                            y=-0.15,
-                            xref="paper",
-                            yref="paper",
-                            text="* Includes 10% outbound dialing surcharge (customer-provided dialer)",
-                            showarrow=False,
-                            font=dict(size=10)
-                        )
-                    ]
+            current_breakeven = compare_df[compare_df['Agents'] == selected_agent]
+            if not current_breakeven.empty:
+                savings = current_breakeven['Savings'].values[0]
+                breakeven_months = current_breakeven['Breakeven Months'].values[0]
+                
+                st.metric(
+                    "Months to Breakeven",
+                    f"{breakeven_months} months",
+                    delta=f"Saves ${savings:,.2f} {time_period.lower()}",
+                    delta_color="inverse" if breakeven_months > 12 else "normal"
                 )
-            
-            fig.add_hline(y=12, line_dash="dash", line_color="red", annotation_text="1 Year Benchmark")
-            fig.add_vline(x=selected_agent-0.5, line_width=3, line_dash="dash", line_color="red")
-            st.plotly_chart(fig, use_container_width=True)
+                
+                fig = px.line(
+                    compare_df,
+                    x='Agents',
+                    y='Breakeven Months',
+                    title=f"Months to Recover Implementation Cost{'*' if outbound_toggle else ''}",
+                    markers=True
+                )
+                
+                if outbound_toggle:
+                    fig.update_layout(
+                        annotations=[
+                            dict(
+                                x=0.5,
+                                y=-0.15,
+                                xref="paper",
+                                yref="paper",
+                                text="* Includes 10% outbound dialing surcharge (customer-provided dialer)",
+                                showarrow=False,
+                                font=dict(size=10)
+                            )
+                        ]
+                    )
+                
+                fig.add_hline(y=12, line_dash="dash", line_color="red", annotation_text="1 Year Benchmark")
+                fig.add_vline(x=selected_agent-0.5, line_width=3, line_dash="dash", line_color="red")
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Could not generate breakeven analysis: {str(e)}")
 
     with tab4:
         st.markdown(f"### 📈 {analysis_years}-Year Cost Projection{'*' if outbound_toggle else ''}")
 
-        fixed_yearly = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Fixed Pricing')]['YearlyCost'].values[0]
-        payg_yearly = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Pay-As-You-Go')]['YearlyCost'].values[0]
+        try:
+            fixed_yearly = processed_df[(processed_df['Agents'] == selected_agent) & 
+                                      (processed_df['Option'] == 'Fixed Pricing')]['YearlyCost'].values[0]
+            payg_yearly = processed_df[(processed_df['Agents'] == selected_agent) & 
+                                     (processed_df['Option'] == 'Pay-As-You-Go')]['YearlyCost'].values[0]
 
-        years = list(range(1, analysis_years + 1))
-        fixed_costs = calculate_multi_year_costs(fixed_yearly, analysis_years, growth_rate)
-        payg_costs = calculate_multi_year_costs(payg_yearly, analysis_years, growth_rate)
+            years = list(range(1, analysis_years + 1))
+            fixed_costs = [fixed_yearly * ((1 + growth_rate) ** year) for year in range(analysis_years)]
+            payg_costs = [payg_yearly * ((1 + growth_rate) ** year) for year in range(analysis_years)]
 
-        fig = make_subplots(specs=[[{"secondary_y": True}]], subplot_titles=("Cumulative Costs", "Annual Costs"))
+            fig = make_subplots(specs=[[{"secondary_y": True}]], 
+                              subplot_titles=("Cumulative Costs", "Annual Costs"))
 
-        fig.add_trace(
-            go.Scatter(
-                x=years,
-                y=np.cumsum(fixed_costs),
-                name="Fixed Pricing (Cumulative)",
-                line=dict(color='blue', width=4),
-                hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
-            ),
-            secondary_y=False
-        )
+            # Cumulative costs
+            fig.add_trace(
+                go.Scatter(
+                    x=years,
+                    y=np.cumsum(fixed_costs),
+                    name="Fixed Pricing (Cumulative)",
+                    line=dict(color='blue', width=4),
+                    hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
+                ),
+                secondary_y=False
+            )
 
-        fig.add_trace(
-            go.Scatter(
-                x=years,
-                y=np.cumsum(payg_costs),
-                name="PayG (Cumulative)",
-                line=dict(color='green', width=4),
-                hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
-            ),
-            secondary_y=False
-        )
+            fig.add_trace(
+                go.Scatter(
+                    x=years,
+                    y=np.cumsum(payg_costs),
+                    name="PayG (Cumulative)",
+                    line=dict(color='green', width=4),
+                    hovertemplate="Year %{x}<br>Total: $%{y:,.2f}"
+                ),
+                secondary_y=False
+            )
 
-        fig.add_trace(
-            go.Bar(
-                x=years,
-                y=fixed_costs,
-                name="Fixed (Annual)",
-                marker_color='lightblue',
-                opacity=0.7,
-                hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
-            ),
-            secondary_y=True
-        )
+            # Annual costs
+            fig.add_trace(
+                go.Bar(
+                    x=years,
+                    y=fixed_costs,
+                    name="Fixed (Annual)",
+                    marker_color='lightblue',
+                    opacity=0.7,
+                    hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
+                ),
+                secondary_y=True
+            )
 
-        fig.add_trace(
-            go.Bar(
-                x=years,
-                y=payg_costs,
-                name="PayG (Annual)",
-                marker_color='lightgreen',
-                opacity=0.7,
-                hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
-            ),
-            secondary_y=True
-        )
+            fig.add_trace(
+                go.Bar(
+                    x=years,
+                    y=payg_costs,
+                    name="PayG (Annual)",
+                    marker_color='lightgreen',
+                    opacity=0.7,
+                    hovertemplate="Year %{x}<br>Annual: $%{y:,.2f}"
+                ),
+                secondary_y=True
+            )
 
-        fig.add_hline(
-            y=IMPLEMENTATION_COST,
-            line_dash="dot",
-            line_color="red",
-            annotation_text="Implementation Cost",
-            annotation_position="bottom right",
-            secondary_y=False
-        )
+            fig.add_hline(
+                y=IMPLEMENTATION_COST,
+                line_dash="dot",
+                line_color="red",
+                annotation_text="Implementation Cost",
+                annotation_position="bottom right",
+                secondary_y=False
+            )
 
-        if animate_projections:
-            frames = [
-                go.Frame(
-                    data=[
-                        go.Scatter(x=years[:k+1], y=np.cumsum(fixed_costs[:k+1])),
-                        go.Scatter(x=years[:k+1], y=np.cumsum(payg_costs[:k+1])),
-                        go.Bar(x=years[:k+1], y=fixed_costs[:k+1]),
-                        go.Bar(x=years[:k+1], y=payg_costs[:k+1])
-                    ],
-                    name=f"frame_{k}"
-                ) for k in range(analysis_years)
-            ]
+            if animate_projections:
+                frames = [
+                    go.Frame(
+                        data=[
+                            go.Scatter(x=years[:k+1], y=np.cumsum(fixed_costs[:k+1])),
+                            go.Scatter(x=years[:k+1], y=np.cumsum(payg_costs[:k+1])),
+                            go.Bar(x=years[:k+1], y=fixed_costs[:k+1]),
+                            go.Bar(x=years[:k+1], y=payg_costs[:k+1])
+                        ],
+                        name=f"frame_{k}"
+                    ) for k in range(analysis_years)
+                ]
 
-            fig.frames = frames
+                fig.frames = frames
+                fig.update_layout(
+                    updatemenus=[{
+                        "type": "buttons",
+                        "buttons": [
+                            {
+                                "label": "▶️ Play",
+                                "method": "animate",
+                                "args": [None, {"frame": {"duration": 800, "redraw": True}}]
+                            },
+                            {
+                                "label": "⏸️ Pause",
+                                "method": "animate",
+                                "args": [[None], {"frame": {"duration": 0, "redraw": False}}]
+                            }
+                        ]
+                    }]
+                )
+
             fig.update_layout(
-                updatemenus=[{
-                    "type": "buttons",
-                    "buttons": [
-                        {
-                            "label": "▶️ Play",
-                            "method": "animate",
-                            "args": [None, {"frame": {"duration": 800, "redraw": True}}]
-                        },
-                        {
-                            "label": "⏸️ Pause",
-                            "method": "animate",
-                            "args": [[None], {"frame": {"duration": 0, "redraw": False}}]
-                        }
-                    ]
-                }]
+                title=f"{analysis_years}-Year Cost Projection (Growth: {growth_rate*100:.1f}%){'*' if outbound_toggle else ''}",
+                xaxis_title="Years",
+                yaxis_title="Cumulative Cost (USD)",
+                yaxis2_title="Annual Cost (USD)",
+                hovermode="x unified"
             )
 
-        fig.update_layout(
-            title=f"{analysis_years}-Year Cost Projection (Growth: {growth_rate*100:.1f}%){'*' if outbound_toggle else ''}",
-            xaxis_title="Years",
-            yaxis_title="Cumulative Cost (USD)",
-            yaxis2_title="Annual Cost (USD)",
-            hovermode="x unified"
-        )
+            if outbound_toggle:
+                fig.add_annotation(
+                    x=0.5,
+                    y=-0.15,
+                    xref="paper",
+                    yref="paper",
+                    text="* Includes 10% outbound dialing surcharge (customer-provided dialer)",
+                    showarrow=False,
+                    font=dict(size=10)
+                )
 
-        if outbound_toggle:
-            fig.add_annotation(
-                x=0.5,
-                y=-0.15,
-                xref="paper",
-                yref="paper",
-                text="* Includes 10% outbound dialing surcharge (customer-provided dialer)",
-                showarrow=False,
-                font=dict(size=10)
-            )
-
-        st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Could not generate projection: {str(e)}")
 
     with tab5:
         st.markdown("### 📁 Raw Data")
@@ -1004,40 +1015,19 @@ def main():
 
     # Recommendation
     st.markdown("### 🚀 Recommendation")
-    fixed_cost = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Fixed Pricing')][f"{time_period}Cost"].values[0]
-    payg_cost = processed_df[(processed_df['Agents'] == selected_agent) & (processed_df['Option'] == 'Pay-As-You-Go')][f"{time_period}Cost"].values[0]
-    
-    if payg_cost < fixed_cost:
-        savings = fixed_cost - payg_cost
-        breakeven = (IMPLEMENTATION_COST / savings) if savings > 0 else 0
-        st.success(f"""
-        **Recommendation for {selected_agent} Agents:**
-        - Choose **Pay-As-You-Go** 
-        - Save **{format_currency(savings, show_inr, usd_to_inr)} {time_period.lower()}**
-        - Breakeven in **{breakeven:.1f} months**
-        """)
-    else:
-        savings = payg_cost - fixed_cost
-        st.success(f"""
-        **Recommendation for {selected_agent} Agents:**
-        - Choose **Fixed Pricing** 
-        - Save **{format_currency(savings, show_inr, usd_to_inr)} {time_period.lower()}**
-        - Immediate savings
-        """)
+    st.success(recommendation)
 
     # Footer
     st.markdown("---")
-    footer_note = f"""
+    st.caption(f"""
     **Note:**  
-    <span style="color: red;">*</span>**Outbound dialing:** adds 10% to the base telephony cost (Customer must provide their own dialer)  
-    - **Chat Agent Cost:** Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)  
-    - **Email Agent Cost:** $1,200 for 20,000 emails ($0.06 per additional email)  
-    - **Implementation cost:** $15,000 (one-time)  
-    - **Standard agent time:** {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)  
-    <small>Report generated on {date.today().strftime('%Y-%m-%d')}</small>  
-    """
-    st.markdown(footer_note, unsafe_allow_html=True)
-    
-    
+    *Outbound dialing: adds 10% to the base telephony cost (Customer must provide their own dialer)*  
+    - Chat Agent Cost: Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)  
+    - Email Agent Cost: $1,200 for 20,000 emails ($0.06 per additional email)  
+    - Implementation cost: $15,000 (one-time)  
+    - Standard agent time: {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)  
+    - Report generated on {date.today().strftime('%Y-%m-%d')}  
+    """)
+
 if __name__ == "__main__":
     main()
