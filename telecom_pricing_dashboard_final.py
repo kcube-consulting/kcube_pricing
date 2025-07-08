@@ -68,83 +68,193 @@ def get_pdf_download_link(pdf, filename):
         return "<p style='color:red'>PDF generation failed</p>"
 
 def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
-    """Generate a PDF report with pricing details"""
+    """Generate a premium consulting-style PDF report with visual impact"""
     try:
+        # Initialize PDF with professional settings
         pdf = FPDF()
         pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
         
-        # Set font and styles
+        # ========== HEADER SECTION ========== #
+        # Add consulting firm logo (replace with your actual logo path)
+        try:
+            pdf.image("kcube_logo.png", x=10, y=8, w=30)
+        except:
+            pass  # Continue if logo not found
+            
+        # Premium header with accent line
+        pdf.set_y(20)
+        pdf.set_font("helvetica", "B", 20)
+        pdf.set_text_color(0, 51, 102)  # Dark blue
+        pdf.cell(0, 10, "Kcube Consulting Pricing Analysis", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        
+        # Accent line
+        pdf.set_draw_color(0, 102, 204)  # Blue accent
+        pdf.set_line_width(0.75)
+        pdf.line(50, pdf.get_y(), 160, pdf.get_y())
+        pdf.ln(8)
+        
+        # Report metadata
         pdf.set_font("helvetica", "", 10)
+        pdf.set_text_color(100, 100, 100)  # Dark gray
+        pdf.cell(0, 6, f"Prepared for: {config.get('client_name', 'Client')}", align='L')
+        pdf.cell(0, 6, f"Report Date: {date.today().strftime('%B %d, %Y')}", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(10)
         
-        # Professional header matching the app
-        pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, "Kcube Consulting Pricing Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-        pdf.ln(5)  # Add small space after header
+        # ========== EXECUTIVE SUMMARY ========== #
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(0, 51, 102)  # Dark blue
+        pdf.cell(0, 10, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Configuration section
+        # Summary box with shadow effect
+        pdf.set_fill_color(245, 248, 250)  # Light blue-gray
+        pdf.set_draw_color(200, 210, 220)
+        pdf.rounded_rect(10, pdf.get_y(), 190, 30, 3, style='DF')
+        
+        pdf.set_xy(15, pdf.get_y()+5)
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, "Configuration Parameters", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, 6, f"Optimal Pricing Model for {config['agent_count']} Agents:", align='L')
+        
+        fixed_cost = numeric_table.iloc[-1]['Fixed_Monthly_Value']
+        payg_cost = numeric_table.iloc[-1]['PAYG_Monthly_Value']
+        savings = abs(fixed_cost - payg_cost)
+        
+        pdf.set_x(15)
         pdf.set_font("helvetica", "", 10)
+        if payg_cost < fixed_cost:
+            pdf.multi_cell(0, 6, f"Recommended: Pay-As-You-Go (Saves ${savings:,.2f} monthly)", align='L')
+        else:
+            pdf.multi_cell(0, 6, f"Recommended: Fixed Pricing (Saves ${savings:,.2f} monthly)", align='L')
         
-        config_items = [
-            f"Agent Count: {config['agent_count']}",
-            f"Time Period: {config['time_period']}",
-            f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)",
-            f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}",
-            f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}",
-            f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}"
-        ]
+        pdf.set_x(15)
+        pdf.multi_cell(0, 6, f"Implementation Cost: $15,000 (one-time)", align='L')
+        pdf.ln(15)
         
-        for item in config_items:
-            pdf.cell(0, 6, item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # ========== COST BREAKDOWN ========== #
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, "Detailed Cost Comparison", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        pdf.ln(5)
+        # Table styling
+        header_fill = (0, 51, 102)  # Dark blue
+        fixed_fill = (230, 245, 230)  # Light green
+        payg_fill = (245, 230, 230)   # Light red
+        accent_color = (0, 102, 204)  # Blue
         
-        # Notes section with proper formatting
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, "Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", "", 10)
+        # Column widths
+        col_widths = [80, 55, 55]  # Metric, Fixed, PAYG
         
-        # Predefined notes with proper spacing
-        notes_content = [
-            ("*Outbound dialing:", "adds 10% to the base telephony cost (Customer must provide their own dialer)"),
-            ("- Chat Agent Cost:", "Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)"),
-            ("- Email Agent Cost:", "$1,200 for 20,000 emails ($0.06 per additional email)"),
-            ("- Implementation cost:", "$15,000 (one-time)"),
-            ("- Standard agent time:", f"{config['minutes_per_agent']} minutes/month ({(config['minutes_per_agent']/60):.1f} hours)")
-        ]
+        # Header row
+        pdf.set_fill_color(*header_fill)
+        pdf.set_text_color(255, 255, 255)  # White text
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(col_widths[0], 8, "COST COMPONENT", border=1, fill=True, align='L')
+        pdf.cell(col_widths[1], 8, "FIXED PRICING", border=1, fill=True, align='C')
+        pdf.cell(col_widths[2], 8, "PAY-AS-YOU-GO", border=1, fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        for label, text in notes_content:
-            if label.startswith('*'):
-                # Outbound dialing with red asterisk
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(5, 6, "*", new_x=XPos.RIGHT)
-                pdf.set_text_color(255, 0, 0)  # Red
-                pdf.cell(5, 6, "", new_x=XPos.RIGHT)  # Space
-                pdf.set_text_color(0, 0, 0)  # Black
-                pdf.cell(40, 6, label[1:], new_x=XPos.RIGHT)
-                pdf.set_font("helvetica", "", 10)
-                pdf.multi_cell(0, 6, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            else:
-                # Other items with proper spacing
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(5, 6, "-", new_x=XPos.RIGHT)
-                pdf.cell(40, 6, label[1:], new_x=XPos.RIGHT)
-                pdf.set_font("helvetica", "", 10)
-                pdf.multi_cell(0, 6, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # Data rows
+        for i, (_, row) in enumerate(display_table.iterrows()):
+            # Alternate row colors
+            fill_color = (255, 255, 255) if i % 2 == 0 else (245, 245, 245)
+            
+            metric = str(row['Metric'])[:25]  # Truncate if needed
+            fixed = str(row[f'Fixed_{config["time_period"]}'])
+            payg = str(row[f'PAYG_{config["time_period"]}'])
+            
+            # Metric cell
+            pdf.set_fill_color(*fill_color)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("helvetica", "B" if i == len(display_table)-1 else "", 9)
+            pdf.cell(col_widths[0], 7, metric, border='LR', fill=True, align='L')
+            
+            # Fixed Pricing cell
+            if "Included" not in fixed and "Not enabled" not in fixed:
+                pdf.set_fill_color(*fixed_fill) if float(numeric_table.iloc[i]['Fixed_Monthly_Value']) < float(numeric_table.iloc[i]['PAYG_Monthly_Value']) else pdf.set_fill_color(*fill_color)
+            pdf.set_font("helvetica", "B" if "Included" not in fixed and "Not enabled" not in fixed else "", 9)
+            pdf.cell(col_widths[1], 7, fixed, border='LR', fill=True, align='C')
+            
+            # Pay-As-You-Go cell
+            if "Included" not in payg and "Not enabled" not in payg:
+                pdf.set_fill_color(*payg_fill) if float(numeric_table.iloc[i]['PAYG_Monthly_Value']) < float(numeric_table.iloc[i]['Fixed_Monthly_Value']) else pdf.set_fill_color(*fill_color)
+            pdf.set_font("helvetica", "B" if "Included" not in payg and "Not enabled" not in payg else "", 9)
+            pdf.cell(col_widths[2], 7, payg, border='LR', fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            
+            # Bottom border
+            pdf.set_draw_color(200, 200, 200)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         
-        # Report generated date at bottom
+        # Footer note
         pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 6, f"Report generated on {date.today().strftime('%Y-%m-%d')}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='R')
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, "* Outbound dialing adds 10% to base telephony cost", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(10)
+        
+        # ========== VISUAL COMPARISON ========== #
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, "Cost Comparison Visualization", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Create simple bar chart
+        chart_height = 40
+        max_value = max(fixed_cost, payg_cost) * 1.2
+        
+        # Fixed Pricing bar
+        fixed_width = (fixed_cost / max_value) * 150
+        pdf.set_fill_color(50, 150, 50)  # Green
+        pdf.rect(40, pdf.get_y(), fixed_width, chart_height/2, style='F')
+        pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 5)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(0, 5, f"Fixed: ${fixed_cost:,.2f}")
+        
+        # Pay-As-You-Go bar
+        payg_width = (payg_cost / max_value) * 150
+        pdf.set_fill_color(150, 50, 50)  # Red
+        pdf.rect(40, pdf.get_y() + chart_height/2 + 5, payg_width, chart_height/2, style='F')
+        pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 10)
+        pdf.cell(0, 5, f"PayG: ${payg_cost:,.2f}")
+        
+        # Y-axis label
+        pdf.set_xy(30, pdf.get_y() + chart_height/4)
+        pdf.set_font("helvetica", "", 8)
+        pdf.cell(0, 5, f"${max_value:,.0f}", align='R')
+        
+        pdf.ln(chart_height + 15)
+        
+        # ========== RECOMMENDATION ========== #
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, "Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        
+        # Recommendation box
+        pdf.set_fill_color(255, 255, 230)  # Light yellow
+        pdf.set_draw_color(220, 220, 170)
+        pdf.rounded_rect(10, pdf.get_y(), 190, 30, 3, style='DF')
+        
+        pdf.set_xy(15, pdf.get_y()+5)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.set_text_color(0, 0, 0)
+        pdf.multi_cell(0, 6, recommendation.split('\n')[0].strip(), align='L')
+        
+        for line in recommendation.split('\n')[1:]:
+            if line.strip():
+                pdf.set_x(15)
+                pdf.set_font("helvetica", "", 10)
+                pdf.multi_cell(0, 6, line.strip(), align='L')
+        
+        pdf.ln(15)
+        
+        # ========== FOOTER ========== #
+        pdf.set_font("helvetica", "I", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, "Confidential - For internal use only", align='L')
+        pdf.cell(0, 5, f"Page 1 of 1", align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None
-        
+        return None        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
