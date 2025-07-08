@@ -140,54 +140,21 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         for line in recommendation.split('\n'):
             pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add notes with proper formatting
+        # Add notes
         pdf.ln(5)
         pdf.set_font("helvetica", "B", 10)
         pdf.cell(200, 8, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
-        
-        # Format the first line with red asterisk
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(10, 8, text="*", fill=False, new_x=XPos.RIGHT)
-        pdf.set_text_color(255, 0, 0)  # Red color for asterisk
-        pdf.cell(10, 8, text="", new_x=XPos.RIGHT)
-        pdf.set_text_color(0, 0, 0)  # Reset to black
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(50, 8, text="Outbound dialing:", new_x=XPos.RIGHT)
-        pdf.set_font("helvetica", "", 10)
-        pdf.multi_cell(0, 8, text="adds 10% to the base telephony cost (Customer must provide their own dialer)", 
-                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add bullet points for other notes
-        note_lines = notes.split('\n')
-        for line in note_lines[2:]:  # Skip first two lines (empty and first note already handled)
-            line = line.strip()
-            if line.startswith('-'):
-                # Bold the label part
-                parts = line.split(':')
-                if len(parts) > 1:
-                    pdf.set_font("helvetica", "B", 10)
-                    pdf.cell(10, 8, text="-", new_x=XPos.RIGHT)
-                    pdf.cell(50, 8, text=f"{parts[0][1:]}:", new_x=XPos.RIGHT)
-                    pdf.set_font("helvetica", "", 10)
-                    pdf.multi_cell(0, 8, text=parts[1].strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                else:
-                    pdf.set_font("helvetica", "", 10)
-                    pdf.multi_cell(0, 8, text=line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            elif line and not line.startswith('Report generated'):
-                pdf.multi_cell(0, 8, text=line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add generated date in small font
-        pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 8, text=f"Report generated on {date.today().strftime('%Y-%m-%d')}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        for line in notes.split('\n'):
+            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None        
+        return None
+        
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
@@ -253,19 +220,15 @@ def get_report_download_links(config, numeric_table, display_table, fixed_cost, 
         - Immediate savings
         """
     
-    # Generate notes with proper formatting
+    # Generate notes
     notes = f"""
+    Note:
     *Outbound dialing: adds 10% to the base telephony cost (Customer must provide their own dialer)
-    
     - Chat Agent Cost: Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)
-    
     - Email Agent Cost: $1,200 for 20,000 emails ($0.06 per additional email)
-    
-    - Implementation cost: $15,000 (one-time)
-    
+    - Implementation cost is $15,000 (one-time)
     - Standard agent time: {config['minutes_per_agent']} minutes/month ({(config['minutes_per_agent']/60):.1f} hours)
-    
-    Report generated on {date.today().strftime('%Y-%m-%d')}
+    - Report generated on {date.today().strftime('%Y-%m-%d')}
     """
     
     # Generate PDF
@@ -287,7 +250,7 @@ def get_report_download_links(config, numeric_table, display_table, fixed_cost, 
         excel_link = "<p style='color:red'>Excel generation failed</p>"
     
     return pdf_link, excel_link
-    
+
 # Data Processing
 @st.cache_data
 def load_excel_data(uploaded_file):
@@ -860,15 +823,15 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("""
+    st.caption(f"""
     **Note:**  
-    <span style="color: red;">*</span>**Outbound dialing:** adds 10% to the base telephony cost (Customer must provide their own dialer)  
-    - **Chat Agent Cost:** Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)  
-    - **Email Agent Cost:** $1,200 for 20,000 emails ($0.06 per additional email)  
-    - **Implementation cost:** $15,000 (one-time)  
-    - **Standard agent time:** {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)  
-    <small>Report generated on {date.today().strftime('%Y-%m-%d')}</small>  
-    """.format(minutes_per_agent=minutes_per_agent), unsafe_allow_html=True)
-    
+    *Outbound dialing: adds 10% to the base telephony cost (Customer must provide their own dialer)*  
+    - Chat Agent Cost: Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)  
+    - Email Agent Cost: $1,200 for 20,000 emails ($0.06 per additional email)  
+    - Implementation cost is $15,000 (one-time)  
+    - Standard agent time: {minutes_per_agent} minutes/month ({(minutes_per_agent/60):.1f} hours)  
+    - Report generated on {date.today().strftime('%Y-%m-%d')}  
+    """)
+
 if __name__ == "__main__":
     main()
