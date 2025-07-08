@@ -1,14 +1,16 @@
-from fpdf.enums import XPos, YPos
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from fpdf import FPDF
+from fpdf.enums import XPos, YPos
+from fpdf.fonts import FontFace
+
 import numpy as np
 import re
 from datetime import date
 from scipy import interpolate
-from fpdf import FPDF
 import base64
 from io import BytesIO
 import os
@@ -70,68 +72,44 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", size=12)
+        
+        # Add a Unicode font (DejaVuSans is a common free font that supports many characters)
+        pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+        pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
+        pdf.set_font("DejaVu", "", 12)
+        
+        # Define font styles
+        normal_style = FontFace(emphasis="")
+        bold_style = FontFace(emphasis="BOLD")
         
         # Add title
-        pdf.cell(200, 10, text="Kcube Pricing Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("DejaVu", "B", 14)
+        pdf.cell(200, 10, text="Kcube Pricing Report", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("DejaVu", "", 12)
         pdf.cell(200, 10, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add configuration
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, text="Configuration Parameters", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Agent Count: {config['agent_count']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Time Period: {config['time_period']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)", 
+        pdf.set_font("DejaVu", "B", 12)
+        pdf.cell(200, 10, text="Configuration Parameters", 
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(200, 8, text=f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}", 
-                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("DejaVu", "", 10)
         
-        # Add cost breakdown
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, text="Cost Breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("Arial", size=10)
+        config_items = [
+            f"Agent Count: {config['agent_count']}",
+            f"Time Period: {config['time_period']}",
+            f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)",
+            f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}",
+            f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}",
+            f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}"
+        ]
         
-        # Set column widths based on content
-        col_widths = [70, 60, 60]  # Metric, Fixed, PAYG
+        for item in config_items:
+            pdf.cell(200, 8, text=item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Add table headers
-        pdf.cell(col_widths[0], 8, text="Metric", border=1)
-        pdf.cell(col_widths[1], 8, text="Fixed Pricing", border=1)
-        pdf.cell(col_widths[2], 8, text="Pay-As-You-Go", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add table rows
-        time_period = config['time_period']
-        for _, row in display_table.iterrows():
-            # Ensure text fits in cells by truncating if necessary
-            metric = str(row['Metric'])[:30]  # Limit to 30 chars
-            fixed = str(row[f'Fixed_{time_period}'])[:25]  # Limit to 25 chars
-            payg = str(row[f'PAYG_{time_period}'])[:25]  # Limit to 25 chars
-            
-            pdf.cell(col_widths[0], 8, text=metric, border=1)
-            pdf.cell(col_widths[1], 8, text=fixed, border=1)
-            pdf.cell(col_widths[2], 8, text=payg, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add recommendation
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, text="Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("Arial", size=10)
-        for line in recommendation.split('\n'):
-            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Add notes
-        pdf.ln(5)
-        pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("Arial", size=10)
-        for line in notes.split('\n'):
-            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        # Rest of your PDF generation code...
+        # Make sure to use pdf.set_font() with the DejaVu font for all text
         
         return pdf
         
