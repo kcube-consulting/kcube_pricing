@@ -1,3 +1,4 @@
+from fpdf.enums import XPos, YPos
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -72,32 +73,37 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_font("Arial", size=12)
         
         # Add title
-        pdf.cell(200, 10, txt="Kcube Pricing Report", ln=1, align='C')
-        pdf.cell(200, 10, txt=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", ln=1, align='C')
+        pdf.cell(200, 10, text="Kcube Pricing Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 10, text=f"Generated on {date.today().strftime('%Y-%m-%d %H:%M:%S')}", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add configuration
         pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, txt="Configuration Parameters", ln=1)
-        pdf.cell(200, 8, txt=f"Agent Count: {config['agent_count']}", ln=1)
-        pdf.cell(200, 8, txt=f"Time Period: {config['time_period']}", ln=1)
-        pdf.cell(200, 8, txt=f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)", ln=1)
-        pdf.cell(200, 8, txt=f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}", ln=1)
-        pdf.cell(200, 8, txt=f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}", ln=1)
-        pdf.cell(200, 8, txt=f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}", ln=1)
+        pdf.cell(200, 10, text="Configuration Parameters", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Agent Count: {config['agent_count']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Time Period: {config['time_period']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Minutes per Agent: {config['minutes_per_agent']} ({(config['minutes_per_agent']/60):.1f} hours)", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Outbound Telephony: {'Yes (+10%)' if config['outbound'] else 'No'}", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Chat Sessions: {config['chat_sessions'] if config['chat_sessions'] > 0 else 'Disabled'}", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(200, 8, text=f"Email Volume: {config['email_volume'] if config['email_volume'] > 0 else 'Disabled'}", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add cost breakdown
         pdf.ln(10)
         pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, txt="Cost Breakdown", ln=1)
+        pdf.cell(200, 8, text="Cost Breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Arial", size=10)
         
         # Set column widths based on content
         col_widths = [70, 60, 60]  # Metric, Fixed, PAYG
         
         # Add table headers
-        pdf.cell(col_widths[0], 8, txt="Metric", border=1)
-        pdf.cell(col_widths[1], 8, txt="Fixed Pricing", border=1)
-        pdf.cell(col_widths[2], 8, txt="Pay-As-You-Go", border=1, ln=1)
+        pdf.cell(col_widths[0], 8, text="Metric", border=1)
+        pdf.cell(col_widths[1], 8, text="Fixed Pricing", border=1)
+        pdf.cell(col_widths[2], 8, text="Pay-As-You-Go", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add table rows
         time_period = config['time_period']
@@ -107,25 +113,25 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             fixed = str(row[f'Fixed_{time_period}'])[:25]  # Limit to 25 chars
             payg = str(row[f'PAYG_{time_period}'])[:25]  # Limit to 25 chars
             
-            pdf.cell(col_widths[0], 8, txt=metric, border=1)
-            pdf.cell(col_widths[1], 8, txt=fixed, border=1)
-            pdf.cell(col_widths[2], 8, txt=payg, border=1, ln=1)
+            pdf.cell(col_widths[0], 8, text=metric, border=1)
+            pdf.cell(col_widths[1], 8, text=fixed, border=1)
+            pdf.cell(col_widths[2], 8, text=payg, border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add recommendation
         pdf.ln(10)
         pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, txt="Recommendation", ln=1)
+        pdf.cell(200, 8, text="Recommendation", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Arial", size=10)
         for line in recommendation.split('\n'):
-            pdf.multi_cell(0, 8, txt=line.strip(), ln=1)
+            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Add notes
         pdf.ln(5)
         pdf.set_font("Arial", 'B', size=10)
-        pdf.cell(200, 8, txt="Notes", ln=1)
+        pdf.cell(200, 8, text="Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Arial", size=10)
         for line in notes.split('\n'):
-            pdf.multi_cell(0, 8, txt=line.strip(), ln=1)
+            pdf.multi_cell(0, 8, text=line.strip(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         return pdf
         
