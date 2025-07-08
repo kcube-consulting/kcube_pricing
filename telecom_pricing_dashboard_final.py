@@ -76,14 +76,14 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         # Set font and styles
         pdf.set_font("helvetica", "", 10)
         
-        # Improved header - centered and more professional
+        # Professional header matching the app
         pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, "Kcube Pricing Report", 0, 1, 'C')
+        pdf.cell(0, 10, "Kcube Consulting Pricing Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
         pdf.ln(5)  # Add small space after header
         
         # Configuration section
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, "Configuration Parameters", 0, 1)
+        pdf.cell(0, 8, "Configuration Parameters", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
         
         config_items = [
@@ -96,20 +96,17 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         ]
         
         for item in config_items:
-            pdf.cell(0, 6, item, 0, 1)
+            pdf.cell(0, 6, item, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         pdf.ln(5)
         
-        # Cost breakdown table (keep your existing table code)
-        # ...
-        
         # Notes section with proper formatting
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, "Notes", 0, 1)
+        pdf.cell(0, 8, "Notes", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", "", 10)
         
         # Predefined notes with proper spacing
-        notes = [
+        notes_content = [
             ("*Outbound dialing:", "adds 10% to the base telephony cost (Customer must provide their own dialer)"),
             ("- Chat Agent Cost:", "Tiered pricing (1K: $240, 5K: $240, 10K: $480, 25K: $1,200, 50K: $2,400)"),
             ("- Email Agent Cost:", "$1,200 for 20,000 emails ($0.06 per additional email)"),
@@ -117,28 +114,29 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             ("- Standard agent time:", f"{config['minutes_per_agent']} minutes/month ({(config['minutes_per_agent']/60):.1f} hours)")
         ]
         
-        for label, text in notes:
+        for label, text in notes_content:
             if label.startswith('*'):
                 # Outbound dialing with red asterisk
                 pdf.set_font("helvetica", "B", 10)
-                pdf.cell(5, 6, "*", 0, 0)
+                pdf.cell(5, 6, "*", new_x=XPos.RIGHT)
                 pdf.set_text_color(255, 0, 0)  # Red
-                pdf.cell(5, 6, "", 0, 0)  # Space
+                pdf.cell(5, 6, "", new_x=XPos.RIGHT)  # Space
                 pdf.set_text_color(0, 0, 0)  # Black
-                pdf.cell(40, 6, label[1:], 0, 0)
+                pdf.cell(40, 6, label[1:], new_x=XPos.RIGHT)
                 pdf.set_font("helvetica", "", 10)
-                pdf.multi_cell(0, 6, text, 0, 1)
+                pdf.multi_cell(0, 6, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             else:
                 # Other items with proper spacing
                 pdf.set_font("helvetica", "B", 10)
-                pdf.cell(5, 6, "-", 0, 0)
-                pdf.cell(40, 6, label[1:], 0, 0)
+                pdf.cell(5, 6, "-", new_x=XPos.RIGHT)
+                pdf.cell(40, 6, label[1:], new_x=XPos.RIGHT)
                 pdf.set_font("helvetica", "", 10)
-                pdf.multi_cell(0, 6, text, 0, 1)
+                pdf.multi_cell(0, 6, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         # Report generated date at bottom
         pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 6, f"Report generated on {date.today().strftime('%Y-%m-%d')}", 0, 1, 'R')
+        pdf.cell(0, 6, f"Report generated on {date.today().strftime('%Y-%m-%d')}", 
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='R')
         
         return pdf
         
