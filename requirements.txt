@@ -1,9 +1,17 @@
+# Core dependencies
 streamlit>=1.32.0
 pandas>=2.1.0
 plotly>=5.18.0
 numpy>=1.26.0
 scipy>=1.11.0
-fpdf2>=2.7.8
-openpyxl>=3.1.0
-pyarrow>=14.0.0
-XlsxWriter>=3.1.0
+fpdf2>=2.7.8  # For PDF generation with XPos/YPos/FontFace support
+
+# Excel/Data processing
+openpyxl>=3.1.0  # For Excel file handling
+pyarrow>=14.0.0  # For pandas Excel operations
+XlsxWriter>=3.1.0  # For Excel report generation
+
+# Additional required packages
+python-dateutil>=2.8.2  # For date handling
+base64io>=1.0.3  # For file encoding
+PyYAML>=6.0.1  # For configuration handling (if used)
