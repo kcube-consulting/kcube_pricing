@@ -67,7 +67,6 @@ def get_pdf_download_link(pdf, filename):
         logger.error(f"PDF link generation failed: {str(e)}")
         return "<p style='color:red'>PDF generation failed</p>"
 
-
 def generate_pdf_report(config, numeric_table, display_table, recommendation, notes):
     """Generate a premium consulting-style PDF report with visual impact"""
     try:
@@ -76,19 +75,20 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
         
-        # Get conversion rate if INR enabled
-        inr_rate = config.get('inr_rate', 75.0)  # Ensure float with default 75.0
-        show_inr = config.get('show_inr', False)
+        # Get conversion rate if INR enabled - default to 85 if not specified
+        inr_rate = float(config.get('inr_rate', 85.0))
+        show_inr = bool(config.get('show_inr', False))
         
         def format_currency(value, is_inr=False):
-            """Helper to format currency values with safe division"""
-            if pd.isna(value) or value == 0:
-                return "N/A"
+            """Helper to format currency values with safe handling"""
             try:
+                value = float(value)
+                if pd.isna(value) or value == 0:
+                    return "N/A"
                 if is_inr and show_inr:
-                    return f"INR {float(value)*float(inr_rate):,.2f}"
-                return f"${float(value):,.2f}"
-            except:
+                    return f"INR {value*inr_rate:,.2f}"
+                return f"${value:,.2f}"
+            except (ValueError, TypeError):
                 return "N/A"
 
         # ========== HEADER SECTION ========== #
@@ -113,7 +113,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.cell(0, 6, date_text, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         if show_inr:
-            pdf.cell(0, 6, f"Conversion Rate: 1 USD = INR {float(inr_rate):,.2f}", 
+            pdf.cell(0, 6, f"Conversion Rate: 1 USD = INR {inr_rate:,.2f}", 
                     align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(10)
         
@@ -122,7 +122,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Summary box (using standard rect)
+        # Summary box
         pdf.set_fill_color(245, 248, 250)  # Light blue-gray
         pdf.set_draw_color(200, 210, 220)
         pdf.rect(10, pdf.get_y(), 190, 30, style='DF')
@@ -156,7 +156,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.set_x(15)
             imp_text = f"Implementation Cost: $15,000 (one-time)"
             if show_inr:
-                imp_text += f" / INR {15000*float(inr_rate):,.0f}"
+                imp_text += f" / INR {15000*inr_rate:,.0f}"
             pdf.multi_cell(0, 6, imp_text, align='L')
         except (ValueError, TypeError, IndexError) as e:
             pdf.set_x(15)
@@ -201,9 +201,9 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
                         fixed_val = float(numeric_table.iloc[i]['Fixed_Monthly_Value'])
                         payg_val = float(numeric_table.iloc[i]['PAYG_Monthly_Value'])
                         if not pd.isna(fixed_val) and fixed_val != 0 and "Included" not in fixed and "Not enabled" not in fixed:
-                            fixed += f"\nINR {fixed_val*float(inr_rate):,.2f}"
+                            fixed += f"\nINR {fixed_val*inr_rate:,.2f}"
                         if not pd.isna(payg_val) and payg_val != 0 and "Included" not in payg and "Not enabled" not in payg:
-                            payg += f"\nINR {payg_val*float(inr_rate):,.2f}"
+                            payg += f"\nINR {payg_val*inr_rate:,.2f}"
                     except:
                         pass
                 
@@ -270,7 +270,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.cell(0, 5, f"Fixed: {format_currency(fixed_cost)}")
             if show_inr:
                 pdf.set_xy(40 + fixed_width + 5, pdf.get_y() + 10)
-                pdf.cell(0, 5, f"INR {fixed_cost*float(inr_rate):,.2f}")
+                pdf.cell(0, 5, f"INR {fixed_cost*inr_rate:,.2f}")
             
             # Pay-As-You-Go bar
             payg_width = (payg_cost / max_value) * 150 if max_value != 0 else 0
@@ -280,7 +280,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
             pdf.cell(0, 5, f"PayG: {format_currency(payg_cost)}")
             if show_inr:
                 pdf.set_xy(40 + payg_width + 5, pdf.get_y() + chart_height/2 + 15)
-                pdf.cell(0, 5, f"INR {payg_cost*float(inr_rate):,.2f}")
+                pdf.cell(0, 5, f"INR {payg_cost*inr_rate:,.2f}")
             
             # Y-axis label
             pdf.set_xy(30, pdf.get_y() + chart_height/4)
@@ -323,7 +323,7 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
     except Exception as e:
         logger.error(f"PDF generation failed: {str(e)}")
         st.error(f"Failed to generate PDF report: {str(e)}")
-        return None        
+        return None
         
 def generate_excel_report(config, numeric_table, display_table, recommendation, notes):
     """Generate an Excel report with all pricing details"""
@@ -654,7 +654,8 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Controls")
-        usd_to_inr = st.number_input("USD to INR Exchange Rate", min_value=1.0, value=87.0, step=0.5)
+        # Set default INR rate to 85 as requested
+        usd_to_inr = st.number_input("USD to INR Exchange Rate", min_value=1.0, value=85.0, step=0.5)
         show_inr = st.toggle("Show INR Pricing", value=False)
         
         agent_options = [1,5,10,15,20,25,30,40,50]
@@ -699,14 +700,41 @@ def main():
         st.markdown("---")
         st.caption("ℹ️ *Outbound dialing requires customer-provided dialer")
 
+    # Process data and prepare configuration
     processed_df = process_pricing_data(df, chat_sessions, email_volume, outbound_toggle, minutes_per_agent)
     numeric_table, display_table = create_detailed_cost_table(
         processed_df, selected_agent, chat_sessions, email_volume, 
         outbound_toggle, minutes_per_agent
     )
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cost Comparison", "📝 Detailed Breakdown", "⚖️ Breakeven Analysis", "📈 Multi-Year Projection", "📁 Raw Data"])
+    # Prepare configuration for PDF report
+    config = {
+        'agent_count': selected_agent,
+        'time_period': time_period,
+        'minutes_per_agent': minutes_per_agent,
+        'outbound': outbound_toggle,
+        'chat_sessions': chat_sessions,
+        'email_volume': email_volume,
+        'analysis_years': analysis_years,
+        'growth_rate': growth_rate,
+        'inr_rate': float(usd_to_inr),  # Using the sidebar input with default 85
+        'show_inr': bool(show_inr),
+        'client_name': "Client"  # You can make this configurable
+    }
 
+    # Generate the PDF report
+    pdf_report = generate_pdf_report(config, numeric_table, display_table, recommendation, notes)
+    
+    # Generate download links
+    if pdf_report:
+        pdf_link = get_pdf_download_link(pdf_report, f"kcube_pricing_{selected_agent}_agents.pdf")
+        st.markdown(pdf_link, unsafe_allow_html=True)
+    else:
+        st.error("Failed to generate PDF report")
+
+    # Display the results in tabs as before
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cost Comparison", "📝 Detailed Breakdown", "⚖️ Breakeven Analysis", "📈 Multi-Year Projection", "📁 Raw Data"])
+    
     with tab1:
         st.markdown(f"### 💵 {time_period} Cost Comparison{'*' if outbound_toggle else ''}")
         
@@ -758,8 +786,8 @@ def main():
         st.markdown("### 📄 Export Detailed Report")
 
         config = {
-            'inr_rate': float(inr_rate),  # Ensure float conversion
-            'show_inr': bool(show_inr),   # Ensure boolean
+            'inr_rate': float(inr_rate),  
+            'show_inr': bool(show_inr), 
             'agent_count': selected_agent,
             'time_period': time_period,
             'outbound': outbound_toggle,
