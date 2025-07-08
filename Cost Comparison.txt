@@ -1,0 +1,68 @@
+https://github.com/kcube-consulting/kcube_pricing.git
+
+# Comparison Table: Option 1 vs. Option 2
+| Metric               | Option 1 (Fixed Agent Bundles)        | Option 2 (Pay-As-You-Go)          | Key Difference                     |
+|--------------------------|------------------------------------------|---------------------------------------|----------------------------------------|
+| Pricing Model        | Fixed cost per agent tier                | Slab-wise hourly rates (lower with higher usage) | Option 1 is predictable; Option 2 scales with demand. |
+| Base Telephony Cost  | $1,200 (1 Agent) ? $12,350 (50 Agents)   | $2.11–$2.50/hour (volume discounts)   | Option 2 wins for mid-range usage (e.g., 5–25 Agents). |
+| Outbound Cost        | +10% of base                             | +10% of hourly rate                   | Identical markup, but Option 2’s base rate is cheaper. |
+| Cost Efficiency      | Best for high-volume (50+ Agents)    | Best for variable/low-volume (1–25 Agents) | Option 1 saves ~15% at 50 Agents. |
+| Overage Flexibility  | Fixed overage rate ($1.72–$10/hour)      | No overage (pay only for used hours)   | Option 2 avoids unused capacity costs. |
+| Implementation       | $15,000 (one-time)                       | $15,000 (one-time)                    | No difference.                         |
+| Commitment           | None (monthly/annual)                    | 12-month minimum                      | Option 1 is more flexible.             |
+| Chat/Email Add-ons   | $2,400 (Chat), $1,200 (Email)            | Identical                             | No difference.                         |
+
+# Cost-Saving Scenarios
+ 1. Low Volume (1–5 Agents)
+- Option 1: $1,320/month (1 Agent)  
+- Option 2: $330/month (1 Agent)  
+  ? Option 2 saves 75% for small teams.
+
+ 2. Mid Volume (10–25 Agents)
+- Option 1: $3,850/month (10 Agents)  
+- Option 2: $2,785/month (10 Agents)  
+  ? Option 2 saves 28%.
+
+ 3. High Volume (50+ Agents)
+- Option 1: $13,585/month (50 Agents)  
+- Option 2: $13,926/month (50 Agents)  
+  ? Option 1 saves ~2.5% (better for scale).
+
+# Visual Cost Trend  
+Total Cost vs. Agents (Annual, Excl. Add-ons)  
+$160k |                                 Option 2 (PAYG)
+       |                              /
+$120k |                           /
+       |                        / 
+ $80k |                     /  
+       |                  /    ? Option 1 (Fixed) becomes cheaper here
+ $40k |               /
+       |            /
+    $0 |_________/
+         10     25     50 Agents
+- Crossover Point: At ~30 Agents, Option 1 becomes cheaper.
+
+# Strategic Recommendations
+1. Choose Option 1 If:  
+   - You have stable, high-volume needs (25+ Agents).  
+   - You prefer predictable billing and hate surprises.  
+
+2. Choose Option 2 If:  
+   - You have fluctuating demand (e.g., seasonal spikes).  
+   - You’re a startup/SMB with 1–25 Agents and want lower upfront costs.  
+
+3. Negotiation Tip:  
+   - For Option 2, ask for custom slabs (e.g., higher tiers at $1.80/hour for 50+ Agents).  
+
+# Hidden Costs & Warnings
+- Outbound Dialer: Both options require customer-provided dialers (+10% cost).  
+- Taxes: Not included in either option (add 5–10% depending on region).  
+- Overage in Option 1: Exceeding included minutes costs $0.06–$0.17/minute.  
+
+# Final Decision Framework
+flowchart TD
+    A[Volume?] -->|1–25 Agents| B[Option 2]
+    A -->|25+ Agents| C[Option 1]
+    B --> D[Need flexibility?] -->|Yes| E[Option 2]
+    D -->|No| F[Compare break-even]
+    C --> G[Lock in savings]

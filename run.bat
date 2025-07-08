@@ -1,0 +1,1 @@
+streamlit run telecom_pricing_dashboard_final.py
