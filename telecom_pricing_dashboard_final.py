@@ -103,12 +103,12 @@ def generate_pdf_report(config, numeric_table, display_table, recommendation, no
         # Format recommendation
         if payg_cost < fixed_cost:
             savings = fixed_cost - payg_cost
-            rec_text = f"Recommended: Pay-As-You-Go (Saves ${savings:,.2f}"
+            rec_text = f"Recommended: Pay-As-You-Go (Saves ${savings:,.2f})"
             if show_inr:
                 rec_text += f" or INR {savings*exchange_rate:,.2f}"
         else:
             savings = payg_cost - fixed_cost
-            rec_text = f"Recommended: Fixed Pricing (Saves ${savings:,.2f}"
+            rec_text = f"Recommended: Fixed Pricing (Saves ${savings:,.2f})"
             if show_inr:
                 rec_text += f" or INR {savings*exchange_rate:,.2f}"
         
